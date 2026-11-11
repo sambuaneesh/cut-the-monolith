@@ -8,20 +8,19 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#ffffff">
 <style>
-/* Layout, top to bottom, one column: title; the service palette (sticky at the top while you scroll);
-   the 23 classes grouped by Java package; 
-   the sticky bottom bar with progress, your name and Send. Pick a service, then tap classes to paint them. */
+/* One column, top to bottom: title; the colours (sticky at the top while you scroll), one colour per microservice;
+   the 23 classes as one alphabetical list; the sticky bottom bar with progress, your name and Send.
+   Every visit starts empty. No scores are shown: they are computed and sent to the class board only. */
 :root {
 	--ink: #1d2a44; --muted: #667085; --faint: #98a2b3; --line: #e4e7ec; --soft: #f6f7f9; --paper: #ffffff;
 	--accent: #d62839; --ok: #1f9e89;
 	--ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-	--mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 	color-scheme: light;
 }
 * { box-sizing: border-box }
 html { background: var(--paper); -webkit-text-size-adjust: 100% }
 body { background: var(--paper); color: var(--ink); font: 16px/1.45 var(--ui); margin: 0; -webkit-tap-highlight-color: transparent }
-button, input, textarea { font: inherit; color: inherit }
+button, input { font: inherit; color: inherit }
 button { cursor: pointer }
 :focus-visible { outline: 3px solid color-mix(in srgb, var(--ink) 55%, transparent); outline-offset: 2px }
 .col { max-width: 680px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
@@ -34,62 +33,45 @@ button { cursor: pointer }
 .ghost { border: 1px solid var(--line); background: var(--paper); border-radius: 12px; min-height: 44px; padding: 0 14px; font-size: 15px; font-weight: 500; white-space: nowrap; flex: none }
 .ghost:hover { border-color: var(--faint) }
 
-/* the palette: one chip per service */
+/* the colours: one per microservice, then + */
 .palette { position: sticky; top: 0; z-index: 5; background: var(--paper); padding-top: 12px; padding-bottom: 10px }
 .palette.stuck { box-shadow: 0 6px 14px -12px rgba(29, 42, 68, 0.45) }
-.svcs { display: flex; flex-wrap: wrap; gap: 8px }
-.svc { flex: 0 0 calc((100% - 76px) / 3); min-width: 0; min-height: 52px; display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+.svcs { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px }
+.svc { position: relative; display: flex; min-width: 0 }
+.pick { flex: 1; min-width: 0; min-height: 52px; display: flex; align-items: center; gap: 8px; padding: 6px 12px;
 	border: 2px solid var(--c); background: var(--t); color: var(--ink); border-radius: 14px; text-align: left }
-.svc .mk { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c) }
-.svc .nm { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.svc { padding: 6px 10px 6px 12px }
-.svc[aria-pressed="true"] { background: var(--c); color: #fff; box-shadow: 0 2px 8px -3px var(--c) }
-.svc[aria-pressed="true"] .mk { background: none; width: auto; height: auto; font-size: 14px; line-height: 1 }
-.svc[aria-pressed="true"] .mk::before { content: '✓'; font-weight: 700 }
-.add { flex: 0 0 52px; min-height: 52px; border: 2px dashed var(--line); background: var(--paper); border-radius: 14px; font-size: 24px; line-height: 1; color: var(--muted) }
+.pick .mk { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c) }
+.pick .nm { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.pick[aria-pressed="true"] { background: var(--c); color: #fff; box-shadow: 0 2px 8px -3px var(--c) }
+.pick[aria-pressed="true"] .mk { background: none; width: auto; height: auto; font-size: 14px; line-height: 1 }
+.pick[aria-pressed="true"] .mk::before { content: '✓'; font-weight: 700 }
+.svc.rm .pick { padding-right: 38px }
+.x { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent;
+	font-size: 20px; line-height: 1; color: var(--muted) }
+.pick[aria-pressed="true"] + .x { color: #fff }
+.add { min-height: 52px; border: 2px dashed var(--line); background: var(--paper); border-radius: 14px; font-size: 26px; line-height: 1; color: var(--muted) }
 .add:hover { border-color: var(--faint); color: var(--ink) }
 .say { margin: 8px 2px 0; font-size: 14px; color: var(--muted); min-height: 20px }
 .say b { color: var(--ink); font-weight: 600 }
 
 /* the classes */
-.pkg { margin-top: 18px }
-.pkg h2 { margin: 0 0 8px 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint) }
-.pkg h2 span { text-transform: none; letter-spacing: 0; font-weight: 400 }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px }
+.grid { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px }
 .cls { position: relative; min-height: 58px; padding: 8px 12px 8px 14px; border: 1.5px solid var(--line); background: var(--paper); border-radius: 12px;
 	text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 2px;
 	-webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation }
 .cls .nm { font-size: 15px; font-weight: 500; line-height: 1.2; overflow-wrap: anywhere }
 .cls .tg { font-size: 12.5px; font-weight: 600; line-height: 1.2; color: var(--c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .cls .tg:empty { display: none }
-.cls.on { border-color: var(--c); background: var(--t) }
-.cls.on { box-shadow: inset 5px 0 0 var(--c) }
+.cls.on { border-color: var(--c); background: var(--t); box-shadow: inset 5px 0 0 var(--c) }
 .cls:not(.on):hover { border-color: var(--faint) }
 @media (prefers-reduced-motion: no-preference) {
-	.cls, .svc { transition: background-color 120ms, border-color 120ms, transform 90ms }
-	.cls:active, .svc:active, .add:active { transform: scale(0.97) }
+	.cls, .pick { transition: background-color 120ms, border-color 120ms, transform 90ms }
+	.cls:active, .pick:active, .add:active { transform: scale(0.97) }
 	.cls.pop { animation: pop 220ms ease-out }
 	@keyframes pop { 40% { transform: scale(1.04) } }
 }
 .tip { margin: 18px 2px 0; font-size: 13.5px; color: var(--faint) }
-
-/* extras outside game mode */
-.more { margin-top: 26px; border-top: 1px solid var(--line) }
-.more details { border-bottom: 1px solid var(--line) }
-.more summary { min-height: 52px; display: flex; align-items: center; justify-content: space-between; font-weight: 600; cursor: pointer; list-style: none }
-.more summary::-webkit-details-marker { display: none }
-.more summary::after { content: '+'; font-size: 22px; font-weight: 400; color: var(--muted) }
-.more details[open] summary::after { content: '–' }
-.more .body { padding: 0 0 18px; display: grid; gap: 12px; font-size: 15px }
-.more .body p { margin: 0 }
-.defs { margin: 0; display: grid; gap: 10px }
-.defs dt { font-weight: 600 }
-.defs dd { margin: 2px 0 0; color: var(--muted) }
-textarea { width: 100%; min-height: 120px; font: 13px/1.4 var(--mono); border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--soft); resize: vertical }
-.row { display: flex; flex-wrap: wrap; gap: 8px }
-.primary { border: 0; background: var(--ink); color: #fff; border-radius: 12px; min-height: 44px; padding: 0 16px; font-weight: 600 }
-.notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px }
-.notes li.bad { color: var(--accent) } .notes li.good { color: var(--ok) }
+.primary { border: 0; background: var(--ink); color: #fff; border-radius: 12px; min-height: 48px; padding: 0 20px; font-weight: 600 }
 
 /* the bottom bar */
 .bar { position: sticky; bottom: 0; z-index: 6; background: var(--paper); border-top: 1px solid var(--line); margin-top: 28px;
@@ -98,10 +80,6 @@ textarea { width: 100%; min-height: 120px; font: 13px/1.4 var(--mono); border: 1
 .prog i { display: block; height: 100%; width: 0; background: var(--ink); transition: width 200ms }
 .prog.done i { background: var(--ok) }
 .bar .col { padding-top: 10px; padding-bottom: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px }
-.scores { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px }
-.sc { border: 0; background: var(--soft); border-radius: 10px; padding: 5px 2px; text-align: center; min-height: 44px }
-.sc .k { display: block; font-size: 11px; color: var(--muted); line-height: 1.2 }
-.sc .v { display: block; font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.25 }
 .send { display: flex; align-items: center; gap: 8px }
 .count { flex: none; min-width: 64px; line-height: 1.1 }
 .count b { display: block; font-size: 19px; font-variant-numeric: tabular-nums }
@@ -115,7 +93,7 @@ textarea { width: 100%; min-height: 120px; font: 13px/1.4 var(--mono); border: 1
 .msg:empty { display: none }
 .msg.bad { color: var(--accent) } .msg.good { color: var(--ok) }
 
-/* bottom sheet (rename, class dependencies, start over, score notes) */
+/* bottom sheet (the guide, a class's dependencies) */
 dialog.sheet { border: 0; padding: 0; width: 100%; max-width: 560px; max-height: 85vh; margin: auto auto 0; border-radius: 20px 20px 0 0; background: var(--paper); color: var(--ink);
 	box-shadow: 0 -10px 40px rgba(29, 42, 68, 0.18) }
 @media (min-width: 700px) { dialog.sheet { margin: auto; border-radius: 20px } }
@@ -123,28 +101,22 @@ dialog.sheet::backdrop { background: rgba(29, 42, 68, 0.32) }
 .sheet .in { padding: 20px 20px calc(18px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 14px }
 .sheet h2 { margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere }
 .sheet p { margin: 0; color: var(--muted) }
-.sheet label { display: grid; gap: 6px; font-size: 14px; color: var(--muted) }
-.sheet input { min-height: 48px; border: 1.5px solid var(--line); border-radius: 12px; padding: 0 12px; font-size: 17px; color: var(--ink) }
-.sheet input:focus { border-color: var(--ink); outline: none }
-.sheet .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap }
-.sheet .danger { color: var(--accent); margin-right: auto }
-.sheet .danger[disabled] { color: var(--faint); cursor: default }
+.sheet .acts { display: flex; gap: 8px; justify-content: flex-end }
 .sheet h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint) }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 16px }
+.steps li { display: flex; gap: 12px; align-items: center }
+.steps .ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; background: var(--soft) }
 .deps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px }
 .deps li { display: flex; align-items: center; gap: 10px; font-size: 15px }
 .deps .sw { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c, transparent); border: 1.5px solid var(--c, var(--faint)) }
-.deps .where { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45% }
-.opts { display: grid; gap: 8px }
-.opt { border: 1.5px solid var(--line); background: var(--paper); border-radius: 14px; padding: 12px 14px; text-align: left; min-height: 56px }
-.opt b { display: block; font-weight: 600 }
-.opt span { display: block; font-size: 14px; color: var(--muted) }
-.opt:hover { border-color: var(--faint) }
+.deps .where { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap }
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(120px + env(safe-area-inset-bottom, 0px)); z-index: 30; background: var(--ink); color: #fff;
 	border-radius: 12px; padding: 6px 6px 6px 14px; display: flex; align-items: center; gap: 10px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(29, 42, 68, 0.25) }
 .toast button { border: 0; background: rgba(255, 255, 255, 0.16); color: #fff; border-radius: 9px; min-height: 36px; padding: 0 12px; font-weight: 600 }
+body.locked .add, body.locked .x, body.locked #reset { display: none }
+body.locked .go { background: var(--ok); opacity: 1 }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
-body.game .nogame { display: none !important }
 </style>
 </head>
 <body>
@@ -152,27 +124,26 @@ body.game .nogame { display: none !important }
 
 <header class="col top">
 	<div class="hrow">
-		<h1 id="title">Cut the Monolith</h1>
-		<button class="ghost" id="menu" aria-haspopup="dialog">Start over</button>
+		<h1>Cut the Monolith</h1>
+		<button class="ghost" id="reset">Start over</button>
 	</div>
-	<p id="lede">Split Spring PetClinic's 23 classes into microservices you would defend. Pick a service, then tap classes to put them in it.</p>
+	<p>Split Spring PetClinic's 23 classes into microservices you would defend.</p>
 </header>
 
 <section class="palette" id="palette" aria-labelledby="h-svcs">
 	<div class="col">
-		<h2 class="sr" id="h-svcs">Your services</h2>
+		<h2 class="sr" id="h-svcs">Your microservices</h2>
 		<div class="svcs" id="svcs"></div>
 		<p class="say" id="say" aria-live="polite"></p>
 	</div>
 </section>
 
-<main class="col" id="classes" aria-label="The 23 classes, grouped by Java package"></main>
+<main class="col grid" id="classes" aria-label="The 23 classes"></main>
 <p class="col tip">Press and hold a class (or right-click it) to see what it depends on.</p>
 
 <div class="bar" id="bar">
 	<div class="prog" id="prog" aria-hidden="true"><i></i></div>
 	<div class="col">
-		<div class="scores nogame" id="scores" aria-label="Scores of your cut"></div>
 		<p class="msg" id="send-msg" aria-live="polite"></p>
 		<div class="send">
 			<div class="count" id="count" aria-live="polite"><b>0/23</b><span>placed</span></div>
@@ -239,44 +210,18 @@ function bcp(dec, labels) {
 }
 
 // ---------------------------------------------------------------- state
-// Game mode (?game=1): the class game before the metrics are taught. Every score stays hidden (they are still
-// computed and sent to the board); the presets that would give an answer away are hidden too.
-const GAME = new URLSearchParams(location.search).has('game')
-const KEY = 'cut-the-monolith-v2', MAX = 8
-// service colours: the deck's teal, blue, violet, amber, crimson, then slate, green, plum (darkened where white text sits on them)
+// A microservice is just a colour; its name on the board is the colour's name. Every visit starts empty.
+// colours: the deck's teal, blue, violet, amber, crimson, then slate, green, plum (darkened where white text sits on them)
 const PALETTE = ['#1a8a78', '#2f6fae', '#7a5ba8', '#a86f00', '#d62839', '#4f5d75', '#3f7d2c', '#a8407a']
-const HUES = ['Teal', 'Blue', 'Violet', 'Amber', 'Red', 'Slate', 'Green', 'Plum'] // default service names
+const HUES = ['Teal', 'Blue', 'Violet', 'Amber', 'Red', 'Slate', 'Green', 'Plum']
+const MAX = PALETTE.length
 function tint(hex, a = 0.12) { const n = parseInt(hex.slice(1), 16), m = (v) => Math.round(255 - (255 - v) * a); return `rgb(${m(n >> 16)}, ${m((n >> 8) & 255)}, ${m(n & 255)})` }
-const colorOf = (s) => PALETTE[(s.color ?? 0) % PALETTE.length]
-function freeColor() { const used = new Set(state.services.map((s) => s.color % PALETTE.length)); for (let i = 0; i < PALETTE.length; i++) if (!used.has(i)) return i; return state.services.length % PALETTE.length }
-function freeName(color) { const used = new Set(state.services.map((s) => s.name)); for (const n of [HUES[color], ...HUES, ...HUES.map((h) => h + ' 2')]) if (!used.has(n)) return n; return 'Service ' + state.services.length }
-
-function fromPreset(p) {
-	const mk = (pairs, extra = {}) => ({ services: pairs.map(([name, classes], i) => ({ name, classes: [...classes], color: i % PALETTE.length })), unassigned: [], sel: 0, source: 'hand', ...extra })
-	if (p === 'one') return mk([['PetClinic', DATA.classes]], { source: 'trap' })
-	if (p === 'blank') return mk([[HUES[0], []], [HUES[1], []], [HUES[2], []]], { unassigned: [...DATA.classes] })
-	if (p === 'workflow') return mk(Object.entries(DATA.workflow))
-	const by = {}
-	for (const c of DATA.classes) (by[DATA.packages[c]] ??= []).push(c)
-	return mk(Object.entries(by))
-}
-// a saved state is used only if it still places each of the 23 classes exactly once
-function load() {
-	try {
-		const s = JSON.parse(localStorage.getItem(KEY) || 'null')
-		if (!s || !Array.isArray(s.services) || !s.services.length || !Array.isArray(s.unassigned)) return null
-		const all = [...s.unassigned, ...s.services.flatMap((x) => x.classes)]
-		if (all.length !== DATA.classes.length || new Set(all).size !== all.length || !all.every((c) => DATA.packages[c])) return null
-		s.services.forEach((x, i) => { x.name = String(x.name || 'Service').slice(0, 30); if (!Number.isInteger(x.color)) x.color = i })
-		if (!(s.sel >= 0 && s.sel < s.services.length)) s.sel = 0
-		return s
-	} catch { return null }
-}
-function save() { try { localStorage.setItem(KEY, JSON.stringify(state)) } catch {} }
-let state = load() ?? fromPreset(GAME ? 'blank' : 'packages')
-function source() { return state.source ?? 'hand' }
+const fresh = () => ({ services: [{ name: HUES[0], color: 0, classes: [] }], unassigned: [...DATA.classes], sel: 0 })
+let state = fresh()
+const colorOf = (s) => PALETTE[s.color]
+function freeColor() { const used = new Set(state.services.map((s) => s.color)); for (let i = 0; i < MAX; i++) if (!used.has(i)) return i; return -1 }
 function decomposition() { const d = {}; for (const s of state.services) if (s.classes.length) d[s.name] = s.classes; return d }
-function unassigned() { return state.unassigned ?? [] }
+function unassigned() { return state.unassigned }
 function ownerIndex(c) { return state.services.findIndex((s) => s.classes.includes(c)) }
 function currentScores() {
 	const dec = decomposition(), n = Object.keys(dec).length
@@ -284,55 +229,39 @@ function currentScores() {
 	if (!n) return { valid, n, cmod: 0, cid: 0, dtp: 0, di: 0, bcp: 0, c2c: 0 }
 	return { valid, n, cmod: cmod(dec), cid: cid(dec).value, dtp: labelPurity(dec, DATA.tables), di: labelPurity(dec, DATA.usecases), bcp: bcp(dec, DATA.usecases), c2c: c2c(dec, 0.5) }
 }
+// what Send posts to the class board
+function payload(group) { return { room: ROOM, group, kind: 'hand', services: decomposition(), unassigned: unassigned().length, scores: currentScores(), device: DEVICE } }
 // the rules a cut must meet to be ranked on the board: short words for the bar, a sentence for the message
 function problems() {
 	const out = [], left = unassigned().length, n = Object.keys(decomposition()).length, empty = state.services.filter((s) => !s.classes.length)
-	if (left) out.push([`${left} to go`, `${left} class${left > 1 ? 'es are' : ' is'} not in a service yet`])
-	if (n < 3) out.push(['need 3+ services', `only ${n} service${n === 1 ? ' has' : 's have'} classes; a valid cut needs at least three`])
-	if (empty.length) out.push(['empty service', `“${empty[0].name}” is empty: tap classes into it, or tap it twice to delete it`])
+	if (left) out.push([`${left} to go`, `${left} class${left > 1 ? 'es are' : ' is'} not in a microservice yet`])
+	if (n < 3) out.push(['need 3+ colours', `only ${n} colour${n === 1 ? ' has' : 's have'} classes; a valid cut needs at least three microservices`])
+	if (empty.length) out.push(['empty colour', `${empty[0].name} is empty: tap classes into it, or remove it with ×`])
 	return out
 }
 
-// ---------------------------------------------------------------- text
+// ---------------------------------------------------------------- the classes: one alphabetical list, built once, then updated in place
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 const camel = (c) => esc(c).replace(/([a-z])([A-Z])/g, '$1<wbr>$2')
-const METRICS = {
-	cmod: { k: 'CMod', text: '<b>Modularity.</b> For each service: how much of its dependency weight stays inside it, against what crosses to other services. Averaged over services, 0–100. The trap: one big service has nothing crossing, so it scores 100.' },
-	cid: { k: 'CiD', text: '<b>Cyclic independence.</b> If service A calls B and B calls A, neither can change or deploy alone: a distributed monolith. CiD is the share of service pairs without such a two-way dependency, 0–100.' },
-	dtp: { k: 'DTP', text: '<b>Database transaction purity.</b> For each database table: are the classes that touch it kept in one service? A table spread over services means shared data and distributed transactions. 0–100.' },
-	di: { k: 'DI', text: '<b>Domain independence.</b> For each business use case (owners, pets, visits, vets): are its classes in one service, or does the use case hop across services? 0–100, from recorded traces of the use cases.' },
-	bcp: { k: 'BCP', text: '<b>Business context purity.</b> The other direction: does each service serve one use case, or a mix? A service mixing many use cases has no clear business purpose. 0–100.' },
-	c2c: { k: 'C2C-50', text: '<b>Similarity to the developers’ answer.</b> The share of your services that overlap more than 50% with a service of the PetClinic team’s own microservice version. That answer copies shared classes into several services, so treat it as a hint, not a grade.' },
-}
-if (GAME) {
-	document.body.classList.add('game')
-	$('title').textContent = 'You are the architect'
-	$('lede').textContent = 'Split Spring PetClinic\'s 23 classes into microservices you would defend. Pick a service, then tap classes to put them in it.'
-}
-
-// ---------------------------------------------------------------- the classes, built once, then updated in place
 const chip = {}
-{
-	const by = {}
-	for (const c of DATA.classes) (by[DATA.packages[c]] ??= []).push(c)
-	const order = ['owner', 'vet', 'model', 'system', 'petclinic'].filter((p) => by[p]).concat(Object.keys(by).filter((p) => !['owner', 'vet', 'model', 'system', 'petclinic'].includes(p)))
-	$('classes').innerHTML = order.map((p) => `<section class="pkg" aria-labelledby="pkg-${p}"><h2 id="pkg-${p}">${esc(p)} <span>package</span></h2><div class="grid">${
-		by[p].slice().sort().map((c) => `<button class="cls" data-c="${c}"><span class="nm">${camel(c)}</span><span class="tg"></span></button>`).join('')}</div></section>`).join('')
-	for (const b of document.querySelectorAll('.cls')) chip[b.dataset.c] = b
-}
+$('classes').innerHTML = DATA.classes.slice().sort().map((c) => `<button class="cls" data-c="${c}"><span class="nm">${camel(c)}</span><span class="tg"></span></button>`).join('')
+for (const b of document.querySelectorAll('.cls')) chip[b.dataset.c] = b
 
 // ---------------------------------------------------------------- render
 let armed = false // an invalid cut needs a second tap on Send
 function render() {
-	const sel = state.services[state.sel]
-	$('svcs').innerHTML = state.services.map((s, i) => `<button class="svc" data-s="${i}" aria-pressed="${i === state.sel}" style="--c:${colorOf(s)};--t:${tint(colorOf(s))}"
-		aria-label="${esc(s.name)}, ${s.classes.length} class${s.classes.length === 1 ? '' : 'es'}${i === state.sel ? ', selected: tap to rename' : ''}"><span class="mk" aria-hidden="true"></span><span class="nm">${esc(s.name)}</span></button>`).join('')
-		+ (state.services.length < MAX ? '<button class="add" id="add" aria-label="Add a service">+</button>' : '')
-	$('say').innerHTML = `Now placing into <b>${esc(sel.name)}</b> (${sel.classes.length}) · tap it again to rename`
+	const sel = state.services[state.sel], removable = state.services.length > 1
+	$('svcs').innerHTML = state.services.map((s, i) => {
+		const rm = removable && !s.classes.length
+		return `<div class="svc${rm ? ' rm' : ''}" style="--c:${colorOf(s)};--t:${tint(colorOf(s))}"><button class="pick" data-s="${i}" aria-pressed="${i === state.sel}"
+			aria-label="${s.name}, ${s.classes.length} class${s.classes.length === 1 ? '' : 'es'}"><span class="mk" aria-hidden="true"></span><span class="nm">${s.name}</span></button>${
+			rm ? `<button class="x" data-x="${i}" aria-label="Remove ${s.name}">×</button>` : ''}</div>`
+	}).join('') + (state.services.length < MAX ? '<button class="add" id="add" aria-label="New microservice">+</button>' : '')
+	$('say').innerHTML = locked ? 'Your cut has been sent.' : `Tapping a class puts it in <b>${sel.name}</b> (${sel.classes.length}) · <b>+</b> starts a new microservice`
 	for (const c of DATA.classes) {
-		const b = chip[c], i = ownerIndex(c), s = state.services[i]
-		b.classList.toggle('on', i >= 0)
+		const b = chip[c], s = state.services[ownerIndex(c)]
+		b.classList.toggle('on', !!s)
 		if (s) { b.style.setProperty('--c', colorOf(s)); b.style.setProperty('--t', tint(colorOf(s), 0.1)) }
 		b.querySelector('.tg').textContent = s ? s.name : ''
 		b.setAttribute('aria-label', `${c}, ${s ? 'in ' + s.name : 'not placed'}`)
@@ -342,97 +271,74 @@ function render() {
 	$('prog').classList.toggle('done', !issues.length)
 	$('count').classList.toggle('ok', !issues.length)
 	$('count').innerHTML = `<b>${placed}/${DATA.classes.length}</b><span>${issues.length ? issues[0][0] : '✓ ready'}</span>`
-	$('send').textContent = armed ? 'Send anyway' : 'Send'
-	if (!GAME) {
-		const sc = currentScores(), show = (v) => (!sc.n ? '–' : v === 100 || v === 0 ? String(v) : v.toFixed(1))
-		$('scores').innerHTML = Object.entries(METRICS).map(([k, m]) => `<button class="sc" data-m="${k}" aria-label="${m.k} ${show(sc[k])}: what it means"><span class="k">${m.k}</span><span class="v">${show(sc[k])}</span></button>`).join('')
-	}
-	save()
+	$('send').textContent = locked ? 'Sent ✓' : armed ? 'Send anyway' : 'Send'
+	if (locked) { $('send').disabled = true; $('group').disabled = true }
 }
 function changed() { armed = false; setMsg('', ''); render() }
 
 // ---------------------------------------------------------------- painting
 function paint(c) {
+	if (locked) return
 	const s = state.services[state.sel], back = s.classes.includes(c)
 	for (const x of state.services) x.classes = x.classes.filter((y) => y !== c)
-	state.unassigned = unassigned().filter((y) => y !== c)
+	state.unassigned = state.unassigned.filter((y) => y !== c)
 	if (back) state.unassigned.push(c); else s.classes.push(c)
-	state.source = 'hand'
 	try { navigator.vibrate?.(8) } catch {}
 	changed()
 	const b = chip[c]; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop')
 }
 function addService() {
-	if (state.services.length >= MAX) return
-	const color = freeColor()
-	state.services.push({ name: freeName(color), classes: [], color })
+	if (locked) return
+	const color = freeColor(); if (color < 0) return
+	state.services.push({ name: HUES[color], color, classes: [] })
 	state.sel = state.services.length - 1
 	changed()
 }
-function deleteService(i) {
-	if (state.services.length < 2) return
-	const [s] = state.services.splice(i, 1)
-	state.unassigned = [...unassigned(), ...s.classes]
-	state.sel = Math.min(state.sel, state.services.length - 1)
-	if (s.classes.length) state.source = 'hand'
+function removeService(i) {
+	if (locked || state.services.length < 2 || state.services[i].classes.length) return
+	state.services.splice(i, 1)
+	if (state.sel >= i && state.sel > 0) state.sel--
 	changed()
+}
+function startOver() {
+	if (locked || state.unassigned.length === DATA.classes.length && state.services.length === 1) return
+	const before = JSON.stringify(state)
+	state = fresh(); changed()
+	toast('Cleared', () => { state = JSON.parse(before); changed() })
 }
 
 // ---------------------------------------------------------------- sheets
-const sheet = $('sheet'); let openedAt = 0, onClose = null
-function openSheet(html, after) {
+const sheet = $('sheet'); let openedAt = 0
+function openSheet(html) {
 	$('sheet-in').innerHTML = html
-	onClose = after ?? null
 	if (!sheet.open) { sheet.showModal(); openedAt = Date.now() }
 }
 function closeSheet() { if (sheet.open) sheet.close() }
-sheet.addEventListener('close', () => { const f = onClose; onClose = null; f?.() })
 sheet.addEventListener('click', (e) => { if (e.target === sheet && Date.now() - openedAt > 400) closeSheet() }) // tap on the backdrop
-function renameSheet(i) {
-	const s = state.services[i]
-	openSheet(`<h2>Rename this service</h2>
-		<label>Name<input id="rn" maxlength="30" value="${esc(s.name)}" autocomplete="off" enterkeyhint="done"></label>
-		<p>${s.classes.length} class${s.classes.length === 1 ? '' : 'es'} in it.</p>
-		<div class="acts"><button class="ghost danger" data-act="delete"${state.services.length < 2 ? ' disabled' : ''}>Delete service</button><button class="primary" data-act="close">Done</button></div>`, () => changed())
-	const rn = $('rn'); rn.focus(); rn.select()
-	rn.oninput = () => { const v = rn.value.trim() || 'Unnamed'; s.name = state.services.some((x) => x !== s && x.name === v) ? v + ' 2' : v }
-	rn.onkeydown = (e) => { if (e.key === 'Enter') closeSheet() }
-	$('sheet-in').querySelector('[data-act="delete"]').onclick = () => { onClose = null; closeSheet(); deleteService(i) }
+$('sheet-in').addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) closeSheet() })
+function guide() {
+	openSheet(`<h2>How to play</h2><ul class="steps">
+		<li><span class="ic" style="background:${tint(PALETTE[0], 0.18)};color:${PALETTE[0]}">●</span><span>Each colour is one microservice.</span></li>
+		<li><span class="ic" style="background:#fff;border:1.5px solid var(--line);box-shadow:inset 5px 0 0 #1a8a78"></span><span>Tap a class to put it in the selected colour. Tap it again to take it out.</span></li>
+		<li><span class="ic">+</span><span>Press <b>+</b> to start a new microservice.</span></li></ul>
+		<div class="acts"><button class="primary" data-act="close">Got it</button></div>`)
 }
 function depsSheet(c) {
 	const uses = DATA.edges.filter(([s]) => s === c).map(([, t, , w]) => [t, w]).sort((a, b) => b[1] - a[1])
 	const usedBy = DATA.edges.filter(([, t]) => t === c).map(([s, , , w]) => [s, w]).sort((a, b) => b[1] - a[1])
 	const me = state.services[ownerIndex(c)]
 	const item = ([x, w]) => { const s = state.services[ownerIndex(x)]
-		return `<li><span class="sw" style="${s ? `--c:${colorOf(s)}` : ''}" aria-hidden="true"></span><span>${esc(x)}${w > 1 ? ` <small style="color:var(--faint)">×${w}</small>` : ''}</span><span class="where">${s ? esc(s.name) : 'not placed'}</span></li>` }
+		return `<li><span class="sw" style="${s ? `--c:${colorOf(s)}` : ''}" aria-hidden="true"></span><span>${esc(x)}${w > 1 ? ` <small style="color:var(--faint)">×${w}</small>` : ''}</span><span class="where">${s ? s.name : 'not placed'}</span></li>` }
 	const list = (title, xs) => xs.length ? `<div><h3>${title}</h3><ul class="deps">${xs.map(item).join('')}</ul></div>` : ''
-	openSheet(`<h2>${camel(c)}</h2><p>In the <b>${esc(DATA.packages[c])}</b> package · ${me ? 'now in <b>' + esc(me.name) + '</b>' : 'not placed yet'}</p>
+	openSheet(`<h2>${camel(c)}</h2><p>${me ? 'Now in <b>' + me.name + '</b>' : 'Not placed yet'}</p>
 		${list('It uses', uses)}${list('Used by', usedBy)}${uses.length || usedBy.length ? '' : '<p>No static dependencies in either direction.</p>'}
-		<p style="font-size:13.5px">×n: how strong the dependency is (its weight in the study’s graph).</p>
+		<p style="font-size:13.5px">×n: how strong the dependency is.</p>
 		<div class="acts"><button class="primary" data-act="close">Close</button></div>`)
 }
-function menuSheet() {
-	const opt = (act, b, s) => `<button class="opt" data-act="${act}"><b>${b}</b><span>${s}</span></button>`
-	openSheet(`<h2>Start over</h2><div class="opts">
-		${opt('preset:packages', 'Start from the Java packages', 'One service per package (5), then reshape it')}
-		${opt('preset:blank', 'Clear everything', 'Three empty services, every class unplaced')}
-		${GAME ? '' : opt('preset:one', 'One big service', 'Everything together: watch what the scores do')}
-		${GAME ? '' : opt('preset:workflow', 'Our agentic workflow’s answer', 'One run of the workflow from the study')}
-		</div><div class="acts"><button class="ghost" data-act="close">Cancel</button></div>`)
-}
-$('sheet-in').addEventListener('click', (e) => {
-	const a = e.target.closest('[data-act]')?.dataset.act; if (!a) return
-	if (a === 'close') closeSheet()
-	if (a.startsWith('preset:')) {
-		const before = JSON.stringify(state), p = a.slice(7)
-		state = fromPreset(p); closeSheet(); changed()
-		toast({ packages: 'Started from the Java packages', blank: 'Cleared', one: 'Everything in one service', workflow: 'Loaded the workflow’s answer' }[p], () => { state = JSON.parse(before); changed() })
-	}
-})
 let toastTimer = 0
 function toast(text, undo) {
 	$('toast-text').textContent = text; $('toast').hidden = false
-	$('toast-undo').onclick = () => { $('toast').hidden = true; undo() }
+	$('toast-undo').onclick = () => { $('toast').hidden = true; if (!locked) undo() }
 	clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true }, 5000)
 }
 
@@ -455,19 +361,28 @@ $('classes').addEventListener('click', (e) => {
 })
 $('svcs').addEventListener('click', (e) => {
 	if (e.target.closest('#add')) return addService()
+	const x = e.target.closest('[data-x]'); if (x) return removeService(+x.dataset.x)
 	const b = e.target.closest('[data-s]'); if (!b) return
 	const i = +b.dataset.s
-	if (i === state.sel) renameSheet(i); else { state.sel = i; render(); $('svcs').querySelector(`[data-s="${i}"]`)?.focus() }
+	if (i !== state.sel) { state.sel = i; render(); $('svcs').querySelector(`[data-s="${i}"]`)?.focus() }
 })
-$('scores').addEventListener('click', (e) => {
-	const m = METRICS[e.target.closest('[data-m]')?.dataset.m]; if (!m) return
-	openSheet(`<h2>${m.k}</h2><p style="color:var(--ink)">${m.text}</p><div class="acts"><button class="primary" data-act="close">Close</button></div>`)
-})
-$('menu').onclick = menuSheet
+$('reset').onclick = startOver
 new IntersectionObserver(([en]) => $('palette').classList.toggle('stuck', !en.isIntersecting), { threshold: 0 }).observe(document.querySelector('.top'))
 
 // ---------------------------------------------------------------- the class board
-const BOARD = '', ROOM = 'nov12'
+const BOARD = 'https://cut-the-monolith-board.sambuaneesh.workers.dev', ROOM = 'nov12'
+// one cut per device and room: a random device id goes with the cut (the board refuses a second one with 409),
+// and after a send the page stays locked on this phone
+let locked = false, DEVICE = ''
+try { DEVICE = localStorage.getItem('ctm-device') || '' } catch {}
+if (!DEVICE) {
+	try { DEVICE = crypto.randomUUID() } catch { DEVICE = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36) }
+	try { localStorage.setItem('ctm-device', DEVICE) } catch {}
+}
+function lock(group, text, cls) {
+	try { localStorage.setItem('ctm-sent-' + ROOM, group) } catch {}
+	locked = true; armed = false; $('toast').hidden = true; document.body.classList.add('locked'); render(); setMsg(text, cls)
+}
 function setMsg(text, cls) { $('send-msg').textContent = text; $('send-msg').className = 'msg ' + cls }
 try { $('group').value = localStorage.getItem('cut-group') || '' } catch {}
 $('group').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('send').click() })
@@ -477,19 +392,21 @@ $('send').onclick = async () => {
 	try { localStorage.setItem('cut-group', group) } catch {}
 	const issues = problems()
 	if (issues.length && !armed) { armed = true; render(); setMsg(`Not a valid cut yet: ${issues[0][1]}. Tap “Send anyway” to send it as it is.`, 'bad'); return }
-	const dec = decomposition(), s = currentScores()
 	if (!BOARD.startsWith('http')) { setMsg('The class board is not switched on yet.', 'bad'); return }
 	setMsg('Sending…', ''); $('send').disabled = true
 	try {
-		const r = await fetch(BOARD + '/cuts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: ROOM, group, kind: source(), services: dec, unassigned: unassigned().length, scores: s }) })
+		const r = await fetch(BOARD + '/cuts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload(group)) })
+		if (r.status === 409) return lock(group, 'This device has already sent a cut.', 'bad')
 		if (!r.ok) throw new Error(await r.text())
-		armed = false; render(); setMsg(`Sent. Look for “${group}” on the board. You can change your cut and send again.`, 'good')
+		lock(group, 'Your cut is on the board. One cut per person.', 'good')
 	} catch (err) { setMsg('Could not send: ' + (err.message || 'network error') + '. Try again.', 'bad') }
-	finally { $('send').disabled = false }
+	finally { $('send').disabled = locked }
 }
 
-
 render()
+let sentAs = null
+try { sentAs = localStorage.getItem('ctm-sent-' + ROOM) } catch {}
+if (sentAs !== null) { $('group').value = sentAs; lock(sentAs, 'Your cut is on the board. One cut per person.', 'good') } else guide()
 </script>
 
 </body>
