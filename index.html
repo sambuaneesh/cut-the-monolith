@@ -87,6 +87,14 @@ textarea { width: 100%; min-height: 120px; font: 13px var(--mono); border: 1px s
 details summary { cursor: pointer; font-family: var(--display); font-weight: 700 }
 .ref { display: grid; gap: 8px; margin-top: 10px }
 .ref .shared { background: color-mix(in srgb, var(--warn) 22%, transparent); border-color: var(--warn) }
+.bill { display: grid; gap: 12px }
+.bill h3 { font: 700 15px var(--display); margin: 0 0 4px }
+.bill ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 14px }
+.bill code { font: 13px var(--mono) }
+.bill .sum { display: flex; flex-wrap: wrap; gap: 8px }
+.pill { font-size: 13px; border-radius: 999px; padding: 4px 10px; border: 1px solid var(--line); background: var(--bg) }
+.pill.bad { border-color: var(--cut); color: var(--cut) }
+input.text { font: 15px var(--body); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); color: var(--ink); min-width: 0; flex: 1 }
 .compare { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums }
 .compare th, .compare td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap }
 .compare th:first-child, .compare td:first-child { text-align: left }
@@ -108,6 +116,21 @@ details summary { cursor: pointer; font-family: var(--display); font-weight: 700
 		<div class="scores" id="scores"></div>
 		<div class="explain" id="explain"></div>
 		<ul class="flags" id="flags"></ul>
+	</section>
+
+	<section class="panel" aria-labelledby="h-bill">
+		<h2 id="h-bill">The bill for your cut <small>what you would now build and maintain</small></h2>
+		<div class="bill" id="bill"></div>
+	</section>
+
+	<section class="panel" aria-labelledby="h-send">
+		<h2 id="h-send">Share with the class <small>your cut appears on the board</small></h2>
+		<div class="row">
+			<label class="note" for="group">Group name</label>
+			<input class="text" id="group" maxlength="30" placeholder="e.g. Team Vet">
+			<button class="btn primary" id="send">Send to the board</button>
+		</div>
+		<p class="msg" id="send-msg"></p>
 	</section>
 
 	<div class="grid">
@@ -239,6 +262,7 @@ function fromPreset(p) {
 	for (const c of DATA.classes) (by[DATA.packages[c]] ??= []).push(c)
 	return { services: Object.entries(by).map(([name, classes]) => ({ name: name + ' package', classes })) }
 }
+function source() { return state.source ?? 'hand' }
 function decomposition() { const d = {}; for (const s of state.services) if (s.classes.length) d[s.name] = s.classes; return d }
 function unassigned() { return state.unassigned ?? [] }
 
@@ -294,6 +318,7 @@ function render() {
 	state.services.forEach((s, i) => svcHtml.push(serviceCard(s, i, false)))
 	$('services').innerHTML = svcHtml.join('')
 	drawGraph(dec)
+	renderBill(dec, ci.pairs)
 	renderCompare(cm, ci.value, cc, nonEmpty, dtp, di)
 	save()
 }
@@ -337,6 +362,25 @@ function drawGraph(dec) {
 	svg.innerHTML = lines + dots + labels
 }
 
+// What the cut costs to build and run: one remote call per crossing dependency, one owner per shared table,
+// services that must be deployed together.
+function renderBill(dec, cycles) {
+	const own = ownerOf(dec), names = Object.keys(dec)
+	if (names.length < 2) { $('bill').innerHTML = '<p class="note">With one service there is nothing to pay, and nothing was split.</p>'; return }
+	const calls = {}
+	for (const [s, t] of DATA.edges) if (s in own && t in own && own[s] !== own[t]) (calls[own[s] + ' → ' + own[t]] ??= []).push(`${s} → ${t}`)
+	const tables = Object.entries(DATA.tables).map(([tb, cs]) => [tb, [...new Set(cs.filter((c) => c in own).map((c) => own[c]))]]).filter(([, ss]) => ss.length > 1)
+	const nCalls = Object.values(calls).reduce((a, l) => a + l.length, 0)
+	$('bill').innerHTML = `<div class="sum">
+			<span class="pill">${names.length} services to deploy and monitor</span>
+			<span class="pill${nCalls ? ' bad' : ''}">${nCalls} remote call${nCalls === 1 ? '' : 's'} to design and version</span>
+			<span class="pill${tables.length ? ' bad' : ''}">${tables.length} shared table${tables.length === 1 ? '' : 's'}</span>
+			<span class="pill${cycles.length ? ' bad' : ''}">${cycles.length} pair${cycles.length === 1 ? '' : 's'} that must deploy together</span></div>
+		${nCalls ? `<div><h3>New APIs: each line becomes a network call that can be slow or fail</h3><ul>${Object.entries(calls).map(([k, l]) => `<li><b>${escapeAttr(k)}</b>: <code>${l.map(escapeAttr).join(', ')}</code></li>`).join('')}</ul></div>` : ''}
+		${tables.length ? `<div><h3>Shared tables: pick one owner; the others call it or keep a copy</h3><ul>${tables.map(([tb, ss]) => `<li><code>${tb}</code> is used by ${ss.map(escapeAttr).join(', ')}</li>`).join('')}</ul></div>` : ''}
+		${cycles.length ? `<div><h3>Two-way dependencies: a distributed monolith</h3><ul>${cycles.map(([a, b]) => `<li>${escapeAttr(a)} and ${escapeAttr(b)} call each other: neither can change or deploy alone</li>`).join('')}</ul></div>` : ''}`
+}
+
 function renderCompare(cm, ci, cc, n, dtp, di) {
 	const wf = DATA.workflowMetrics
 	$('compare').innerHTML = `<tr><th></th><th>services</th><th>CMod</th><th>CiD</th><th>DTP</th><th>DI</th><th>C2C-50</th></tr>
@@ -365,6 +409,7 @@ function moveTo(c, to) {
 	if (state.unassigned) state.unassigned = state.unassigned.filter((x) => x !== c)
 	if (to === 'new') { state.services.push({ name: `Service ${String.fromCharCode(65 + state.services.length % 26)}`, classes: [c] }) }
 	else state.services[+to].classes.push(c)
+	state.source = 'hand'
 	closeSheet()
 }
 
@@ -380,7 +425,30 @@ document.addEventListener('change', (e) => { if (e.target.matches('input[data-i]
 $('sheet-close').onclick = closeSheet
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet() })
 $('add-svc').onclick = () => { state.services.push({ name: `Service ${String.fromCharCode(65 + state.services.length % 26)}`, classes: [] }); render() }
-$('preset').onchange = (e) => { if (e.target.value) { state = fromPreset(e.target.value); e.target.value = ''; focusMetric = state.services.length === 1 ? 'cmod' : focusMetric; render() } }
+$('preset').onchange = (e) => { if (e.target.value) { state = { ...fromPreset(e.target.value), source: e.target.value === 'one' ? 'trap' : 'hand' }; e.target.value = ''; focusMetric = state.services.length === 1 ? 'cmod' : focusMetric; render() } }
+
+// ---------------------------------------------------------------- the class board
+const BOARD = '', ROOM = 'nov12'
+try { $('group').value = localStorage.getItem('cut-group') || '' } catch {}
+$('send').onclick = async () => {
+	const group = $('group').value.trim().slice(0, 30)
+	if (!group) { $('send-msg').textContent = 'Type a group name first, so you can find your dot.'; $('send-msg').className = 'msg bad'; return }
+	try { localStorage.setItem('cut-group', group) } catch {}
+	const dec = decomposition(), s = currentScores()
+	if (!BOARD.startsWith('http')) { $('send-msg').textContent = 'The class board is not switched on yet.'; $('send-msg').className = 'msg bad'; return }
+	$('send-msg').textContent = 'Sending…'; $('send-msg').className = 'msg'
+	try {
+		const r = await fetch(BOARD + '/cuts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: ROOM, group, kind: source(), services: dec, unassigned: unassigned().length, scores: s }) })
+		if (!r.ok) throw new Error(await r.text())
+		$('send-msg').textContent = `Sent. Look for “${group}” on the board.`; $('send-msg').className = 'msg good'
+	} catch (err) { $('send-msg').textContent = 'Could not send: ' + escapeAttr(err.message || 'network error') + '. Try again.'; $('send-msg').className = 'msg bad' }
+}
+function currentScores() {
+	const dec = decomposition(), n = Object.keys(dec).length
+	const valid = unassigned().length === 0 && n >= 3 && state.services.every((x) => x.classes.length > 0)
+	if (!n) return { valid, n, cmod: 0, cid: 0, dtp: 0, di: 0, bcp: 0, c2c: 0 }
+	return { valid, n, cmod: cmod(dec), cid: cid(dec).value, dtp: labelPurity(dec, DATA.tables), di: labelPurity(dec, DATA.usecases), bcp: bcp(dec, DATA.usecases), c2c: c2c(dec, 0.5) }
+}
 
 // ---------------------------------------------------------------- the LLM exercise
 const PROMPT = `You are a software architect. Decompose this Java monolith (Spring PetClinic) into microservices.
@@ -426,7 +494,7 @@ $('apply').onclick = () => {
 	if (!services.length) return setImport([['', 'The JSON has no services. Expected {"services": {"Name": ["Class", …]}}.']])
 	const missing = DATA.classes.filter((c) => !seen.has(c))
 	if (missing.length) problems.push(`missing: ${missing.join(', ')}`)
-	state = { services, unassigned: missing }
+	state = { services, unassigned: missing, source: 'llm', llmValid: problems.length === 0 }
 	focusMetric = 'valid'
 	setImport(problems.length ? problems.map((p) => ['', p]).concat([['', 'As returned, this answer is <b>not valid</b>. That happens to LLMs: run it again and compare.']]) : [['good', 'Every class placed exactly once. Scored above.']])
 	render()

@@ -1,0 +1,8 @@
+name = "cut-the-monolith-board"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# filled in by `wrangler kv namespace create CUTS`
+[[kv_namespaces]]
+binding = "CUTS"
+id = "__KV_ID__"

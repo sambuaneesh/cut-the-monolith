@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Class Board · Cut the Monolith</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a projector page. Top: counts. Middle: two charts side by side (stacked on narrow screens). Bottom: the LLM answers. */
+:root {
+	--bg: #f3f4f1; --surface: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #d6dbd7; --grid: #e6e9e6;
+	--hand: #0f6e63; --llm: #d55e00; --bad: #c2412d; --ref: #8a8f8b;
+	--display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif; --body: 'Inter', 'Segoe UI', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #121614; --surface: #1b211e; --ink: #e8ece9; --muted: #9aa59f; --line: #2e3632; --grid: #252c28; --hand: #4cc2b2; --llm: #ff8c42; --bad: #ff7a63; --ref: #7d857f; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #121614; --surface: #1b211e; --ink: #e8ece9; --muted: #9aa59f; --line: #2e3632; --grid: #252c28; --hand: #4cc2b2; --llm: #ff8c42; --bad: #ff7a63; --ref: #7d857f; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); padding: 20px max(16px, env(safe-area-inset-right, 0px)) 30px max(16px, env(safe-area-inset-left, 0px)) }
+.wrap { max-width: 1600px; margin: 0 auto; display: grid; gap: 18px }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px }
+h1 { font: 700 clamp(28px, 4vw, 48px)/1.05 var(--display); margin: 0; letter-spacing: -0.02em }
+.counts { display: flex; flex-wrap: wrap; gap: 10px }
+.count { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; min-width: 120px }
+.count .k { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted) }
+.count .v { font: 700 30px var(--display); font-variant-numeric: tabular-nums }
+.charts { display: grid; gap: 18px }
+@media (min-width: 1000px) { .charts { grid-template-columns: 1.15fr 1fr } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0 }
+.panel h2 { font: 700 20px var(--display); margin: 0 0 4px }
+.panel p { margin: 0 0 8px; color: var(--muted); font-size: 14px }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px }
+.tabs button { font: 500 14px var(--body); border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink) }
+button:focus-visible { outline: 2px solid var(--hand); outline-offset: 2px }
+svg { width: 100%; height: auto; display: block }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 6px }
+.legend span { display: inline-flex; align-items: center; gap: 6px }
+.legend svg { width: 16px; height: 16px; flex: none }
+.llm { display: grid; gap: 8px }
+.llm table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums }
+.llm th, .llm td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top }
+.llm td.n { text-align: right; white-space: nowrap }
+.llm code { font: 12.5px var(--mono); color: var(--muted) }
+.tablewrap { overflow-x: auto }
+.status { font-size: 13px; color: var(--muted) }
+</style>
+</head>
+<body>
+<div class="wrap">
+	<header>
+		<div><h1>Class board</h1><div class="status" id="status">connecting…</div></div>
+		<div class="counts" id="counts"></div>
+	</header>
+	<div class="charts">
+		<section class="panel" aria-labelledby="h1c">
+			<h2 id="h1c">Every cut: services against a score</h2>
+			<p>Watch the left edge: fewer services push most scores up.</p>
+			<div class="tabs" id="tabs" role="group" aria-label="Score on the vertical axis"></div>
+			<svg id="c1" viewBox="0 0 760 460" role="img" aria-label="Scatter of number of services against the chosen score"></svg>
+			<div class="legend" id="legend1"></div>
+		</section>
+		<section class="panel" aria-labelledby="h2c">
+			<h2 id="h2c">Modularity against domain fit</h2>
+			<p>Valid cuts only. The line joins cuts that nobody beats on both: the trade-off frontier.</p>
+			<svg id="c2" viewBox="0 0 600 460" role="img" aria-label="Scatter of CMod against DI with the frontier"></svg>
+		</section>
+	</div>
+	<section class="panel llm" aria-labelledby="h3c">
+		<h2 id="h3c">The LLM answers</h2>
+		<p id="llm-sum">No LLM answers yet. In the playground: copy the prompt, ask a chatbot, paste the answer back, send it.</p>
+		<div class="tablewrap"><table id="llm-table"></table></div>
+	</section>
+</div>
+<script>
+const BOARD = '', ROOM = new URLSearchParams(location.search).get('room') || 'nov12'
+// reference points, computed with the same metric code as the playground
+const REF = [
+	{ group: 'one big service', kind: 'ref', scores: { n: 1, valid: false, cmod: 100, cid: 100, dtp: 100, di: 100, bcp: 0, c2c: 0 } },
+	{ group: 'Java packages', kind: 'ref', scores: { n: 5, valid: true, cmod: 44.3, cid: 100, dtp: 100, di: 32.0, bcp: 33.3, c2c: 20.0 } },
+	{ group: 'our workflow (1 run)', kind: 'ref', scores: { n: 4, valid: true, cmod: 66.8, cid: 100, dtp: 83.9, di: 33.4, bcp: 33.3, c2c: 75.0 } },
+]
+const METRICS = [['cmod', 'CMod'], ['di', 'DI'], ['bcp', 'BCP'], ['dtp', 'DTP'], ['cid', 'CiD'], ['c2c', 'C2C-50']]
+let metric = 'cmod', rows = []
+const $ = (id) => document.getElementById(id)
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+$('tabs').innerHTML = METRICS.map(([k, l]) => `<button data-k="${k}" aria-pressed="${k === metric}">${l}</button>`).join('')
+$('tabs').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) { metric = b.dataset.k; for (const x of $('tabs').children) x.setAttribute('aria-pressed', x.dataset.k === metric); draw() } }
+$('legend1').innerHTML = [['var(--hand)', 'circle', 'cut by hand'], ['var(--llm)', 'diamond', 'LLM answer'], ['var(--bad)', 'ring', 'not valid'], ['var(--ref)', 'square', 'reference point']]
+	.map(([c, s, l]) => `<span><svg width="16" height="16" viewBox="-8 -8 16 16" aria-hidden="true">${mark(0, 0, s, c, 6)}</svg>${l}</span>`).join('')
+
+function mark(x, y, shape, color, r = 7) {
+	if (shape === 'diamond') return `<path d="M${x} ${y - r} L${x + r} ${y} L${x} ${y + r} L${x - r} ${y} Z" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`
+	if (shape === 'ring') return `<circle cx="${x}" cy="${y}" r="${r - 1}" fill="none" stroke="${color}" stroke-width="2.5"/>`
+	if (shape === 'square') return `<rect x="${x - r + 1}" y="${y - r + 1}" width="${2 * r - 2}" height="${2 * r - 2}" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`
+	return `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`
+}
+function style(r) {
+	if (r.kind === 'ref') return ['square', 'var(--ref)']
+	if (!r.scores.valid) return ['ring', 'var(--bad)']
+	return r.kind === 'llm' ? ['diamond', 'var(--llm)'] : ['circle', 'var(--hand)']
+}
+// deterministic jitter so dots with the same values don't hide each other
+function jit(s, amp) { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return ((h % 1000) / 1000) * amp - amp / 2 }
+
+function axes(W, H, m, xTicks, yTicks, xl, yl) {
+	let g = ''
+	for (const [v, x] of xTicks) g += `<line x1="${x}" y1="${m.t}" x2="${x}" y2="${H - m.b}" stroke="var(--grid)"/><text x="${x}" y="${H - m.b + 18}" text-anchor="middle" font-size="13" fill="var(--muted)">${v}</text>`
+	for (const [v, y] of yTicks) g += `<line x1="${m.l}" y1="${y}" x2="${W - m.r}" y2="${y}" stroke="var(--grid)"/><text x="${m.l - 8}" y="${y + 4}" text-anchor="end" font-size="13" fill="var(--muted)">${v}</text>`
+	g += `<text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle" font-size="14" fill="var(--ink)">${xl}</text>`
+	g += `<text transform="translate(16 ${(m.t + H - m.b) / 2}) rotate(-90)" text-anchor="middle" font-size="14" fill="var(--ink)">${yl}</text>`
+	return g
+}
+
+function draw() {
+	const all = [...rows, ...REF]
+	// chart 1: services (x) against the chosen metric (y)
+	{
+		const W = 760, H = 460, m = { l: 56, r: 20, t: 16, b: 46 }
+		const maxN = Math.max(8, ...all.map((r) => r.scores.n ?? 0))
+		const X = (n) => m.l + ((n - 0.5) / maxN) * (W - m.l - m.r), Y = (v) => H - m.b - (v / 100) * (H - m.t - m.b)
+		const xt = Array.from({ length: maxN }, (_, i) => [i + 1, X(i + 1)]), yt = [0, 25, 50, 75, 100].map((v) => [v, Y(v)])
+		let g = axes(W, H, m, xt, yt, 'number of services', METRICS.find(([k]) => k === metric)[1])
+		const label = all.length <= 30
+		for (const r of all) {
+			const v = r.scores[metric]; if (v == null) continue
+			const x = X(r.scores.n) + jit(r.group + r.at, 26), y = Y(v) + jit(r.at + r.group, 8)
+			const [sh, c] = style(r)
+			g += `<g>${mark(x, y, sh, c, r.kind === 'ref' ? 8 : 7)}<title>${esc(r.group)}: ${v}</title></g>`
+			if (label || r.kind === 'ref') g += `<text x="${x + 11}" y="${y + 4}" font-size="12" fill="${r.kind === 'ref' ? 'var(--muted)' : 'var(--ink)'}">${esc(r.group)}</text>`
+		}
+		$('c1').innerHTML = g
+	}
+	// chart 2: CMod (x) against DI (y), valid cuts, with the frontier
+	{
+		const W = 600, H = 460, m = { l: 56, r: 20, t: 16, b: 46 }
+		const X = (v) => m.l + (v / 100) * (W - m.l - m.r), Y = (v) => H - m.b - (v / 100) * (H - m.t - m.b)
+		const ticks = [0, 25, 50, 75, 100]
+		let g = axes(W, H, m, ticks.map((v) => [v, X(v)]), ticks.map((v) => [v, Y(v)]), 'CMod (keep dependencies inside)', 'DI (keep use cases together)')
+		const pts = all.filter((r) => r.scores.valid && r.scores.cmod != null && r.scores.di != null)
+		const front = pts.filter((p) => !pts.some((q) => q !== p && q.scores.cmod >= p.scores.cmod && q.scores.di >= p.scores.di && (q.scores.cmod > p.scores.cmod || q.scores.di > p.scores.di)))
+			.sort((a, b) => a.scores.cmod - b.scores.cmod)
+		if (front.length > 1) g += `<polyline points="${front.map((p) => `${X(p.scores.cmod)},${Y(p.scores.di)}`).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="6 5"/>`
+		for (const r of pts) { const [sh, c] = style(r); const x = X(r.scores.cmod) + jit(r.group, 6), y = Y(r.scores.di) + jit(r.group + 'y', 6)
+			g += `<g>${mark(x, y, sh, c, front.includes(r) ? 9 : 6)}<title>${esc(r.group)}: CMod ${r.scores.cmod}, DI ${r.scores.di}</title></g>`
+			if (front.includes(r)) g += `<text x="${x + 11}" y="${y + 4}" font-size="12" fill="var(--ink)">${esc(r.group)}</text>` }
+		$('c2').innerHTML = g
+	}
+	// counts and the LLM table
+	const hand = rows.filter((r) => r.kind !== 'llm'), llm = rows.filter((r) => r.kind === 'llm'), llmValid = llm.filter((r) => r.scores.valid)
+	const key = (r) => Object.values(r.services).map((cs) => [...cs].sort().join(',')).sort().join(' | ')
+	const groups = {}
+	for (const r of llm) (groups[key(r)] ??= []).push(r)
+	const distinct = Object.values(groups).sort((a, b) => b.length - a.length)
+	$('counts').innerHTML = [['cuts by hand', hand.length], ['LLM answers', llm.length], ['LLM answers valid', llm.length ? `${llmValid.length}/${llm.length}` : '–'], ['different LLM splits', llm.length ? distinct.length : '–']]
+		.map(([k, v]) => `<div class="count"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')
+	if (llm.length) {
+		$('llm-sum').textContent = `${llm.length} answers to the same prompt gave ${distinct.length} different split${distinct.length === 1 ? '' : 's'}; ${llm.length - llmValid.length} ${llm.length - llmValid.length === 1 ? 'was' : 'were'} not valid as returned.`
+		$('llm-table').innerHTML = '<tr><th>times</th><th>services</th><th>CMod</th><th>DI</th><th>valid</th><th>the split</th></tr>' + distinct.slice(0, 8).map((g) => {
+			const r = g[0]; return `<tr><td class="n">${g.length}×</td><td class="n">${r.scores.n}</td><td class="n">${r.scores.cmod ?? '–'}</td><td class="n">${r.scores.di ?? '–'}</td><td>${r.scores.valid ? 'yes' : 'no'}</td><td><code>${Object.entries(r.services).map(([n, cs]) => `${esc(n)} (${cs.length})`).join(' · ')}</code></td></tr>`
+		}).join('')
+	}
+}
+
+async function poll() {
+	if (!BOARD.startsWith('http')) { $('status').textContent = 'board not connected: showing the reference points only'; draw(); return }
+	try {
+		const r = await fetch(`${BOARD}/cuts?room=${encodeURIComponent(ROOM)}`, { cache: 'no-store' })
+		if (!r.ok) throw new Error(r.status)
+		rows = await r.json()
+		$('status').textContent = `room “${ROOM}” · updated ${new Date().toLocaleTimeString()}`
+	} catch (e) { $('status').textContent = 'cannot reach the board, retrying…' }
+	draw()
+	setTimeout(poll, 3000)
+}
+draw(); poll()
+</script>
+</body>
+</html>
