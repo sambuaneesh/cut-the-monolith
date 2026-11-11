@@ -184,9 +184,9 @@ function draw() {
 		const ok = scored.filter((r) => r.scores.valid).sort((a, b) => b.scores[metric] - a.scores[metric]).slice(0, 10)
 		const bad = scored.filter((r) => !r.scores.valid).sort((a, b) => b.scores[metric] - a.scores[metric])
 		const medal = (i) => ['🥇', '🥈', '🥉'][i] ?? String(i + 1)
-		if (ok.length) $('lb-table').innerHTML = '<tr><th>#</th><th>team</th><th class="n">' + esc(name) + '</th><th class="n">services</th></tr>' + ok.map((r, i) =>
+		if (ok.length) $('lb-table').innerHTML = '<tr><th>#</th><th>player</th><th class="n">' + esc(name) + '</th><th class="n">services</th></tr>' + ok.map((r, i) =>
 			`<tr class="${i ? '' : 'top1'}"><td>${medal(i)}</td><td>${esc(r.group)}${r.kind === 'llm' ? ' <code>LLM</code>' : ''}</td><td class="n">${r.scores[metric]}</td><td class="n">${r.scores.n}</td></tr>`).join('')
-		if (bad.length) $('shame-table').innerHTML = '<tr><th>team</th><th class="n">' + esc(name) + '</th><th>why not</th></tr>' + bad.slice(0, 8).map((r) =>
+		if (bad.length) $('shame-table').innerHTML = '<tr><th>player</th><th class="n">' + esc(name) + '</th><th>why not</th></tr>' + bad.slice(0, 8).map((r) =>
 			`<tr><td>${esc(r.group)}</td><td class="n"><b>${r.scores[metric]}</b></td><td>${r.scores.n < 3 ? (r.scores.n === 1 ? 'one service = the monolith 🙃' : 'only ' + r.scores.n + ' services') : 'classes left out'}</td></tr>`).join('') + (bad.length > 8 ? `<tr><td colspan="3">…and ${bad.length - 8} more</td></tr>` : '')
 	}
 	// counts and the LLM table
@@ -195,7 +195,7 @@ function draw() {
 	const groups = {}
 	for (const r of llm) (groups[key(r)] ??= []).push(r)
 	const distinct = Object.values(groups).sort((a, b) => b.length - a.length)
-	$('counts').innerHTML = (MYSTERY ? [['teams', hand.length], ['rule-breakers', hand.filter((r) => !r.scores.valid).length]] : [['cuts by hand', hand.length], ['LLM answers', llm.length], ['LLM answers valid', llm.length ? `${llmValid.length}/${llm.length}` : '–'], ['different LLM splits', llm.length ? distinct.length : '–']])
+	$('counts').innerHTML = (MYSTERY ? [['players', hand.length], ['rule-breakers', hand.filter((r) => !r.scores.valid).length]] : [['cuts by hand', hand.length], ['LLM answers', llm.length], ['LLM answers valid', llm.length ? `${llmValid.length}/${llm.length}` : '–'], ['different LLM splits', llm.length ? distinct.length : '–']])
 		.map(([k, v]) => `<div class="count"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')
 	if (llm.length) {
 		$('llm-sum').textContent = `${llm.length} answers to the same prompt gave ${distinct.length} different split${distinct.length === 1 ? '' : 's'}; ${llm.length - llmValid.length} ${llm.length - llmValid.length === 1 ? 'was' : 'were'} not valid as returned.`

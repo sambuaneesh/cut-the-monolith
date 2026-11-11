@@ -9,8 +9,8 @@
 <meta name="theme-color" content="#ffffff">
 <style>
 /* Layout, top to bottom, one column: title; the service palette (sticky at the top while you scroll);
-   the 23 classes grouped by Java package; (outside game mode) score notes and the LLM exercise, collapsed;
-   the sticky bottom bar with progress, team name and Send. Pick a service, then tap classes to paint them. */
+   the 23 classes grouped by Java package; 
+   the sticky bottom bar with progress, your name and Send. Pick a service, then tap classes to paint them. */
 :root {
 	--ink: #1d2a44; --muted: #667085; --faint: #98a2b3; --line: #e4e7ec; --soft: #f6f7f9; --paper: #ffffff;
 	--accent: #d62839; --ok: #1f9e89;
@@ -169,25 +169,6 @@ body.game .nogame { display: none !important }
 <main class="col" id="classes" aria-label="The 23 classes, grouped by Java package"></main>
 <p class="col tip">Press and hold a class (or right-click it) to see what it depends on.</p>
 
-<div class="col more nogame">
-	<details>
-		<summary>What the scores mean</summary>
-		<div class="body"><dl class="defs" id="defs"></dl></div>
-	</details>
-	<details>
-		<summary>Ask an LLM, then score its answer</summary>
-		<div class="body">
-			<p>Copy the prompt into ChatGPT, Claude or any chatbot, then paste its JSON answer below.</p>
-			<div class="row"><button class="primary" id="copy-prompt">Copy the prompt</button><button class="ghost" id="copy-mine">Copy my services as JSON</button></div>
-			<textarea id="prompt-text" readonly aria-label="Prompt for the LLM" hidden></textarea>
-			<label for="paste" class="sr">The LLM's answer (JSON)</label>
-			<textarea id="paste" placeholder='{"services": {"Owners": ["Owner", "OwnerController", …], …}}'></textarea>
-			<div class="row"><button class="primary" id="apply">Score this answer</button></div>
-			<ul class="notes" id="import-notes" aria-live="polite"></ul>
-		</div>
-	</details>
-</div>
-
 <div class="bar" id="bar">
 	<div class="prog" id="prog" aria-hidden="true"><i></i></div>
 	<div class="col">
@@ -195,8 +176,8 @@ body.game .nogame { display: none !important }
 		<p class="msg" id="send-msg" aria-live="polite"></p>
 		<div class="send">
 			<div class="count" id="count" aria-live="polite"><b>0/23</b><span>placed</span></div>
-			<label class="sr" for="group">Team name</label>
-			<input class="team" id="group" maxlength="30" placeholder="Team name" autocomplete="off" enterkeyhint="send">
+			<label class="sr" for="group">Your name</label>
+			<input class="team" id="group" maxlength="30" placeholder="Your name" autocomplete="off" enterkeyhint="send">
 			<button class="go" id="send">Send</button>
 		</div>
 	</div>
@@ -329,7 +310,6 @@ if (GAME) {
 	$('title').textContent = 'You are the architect'
 	$('lede').textContent = 'Split Spring PetClinic\'s 23 classes into microservices you would defend. Pick a service, then tap classes to put them in it.'
 }
-$('defs').innerHTML = Object.values(METRICS).map((m) => `<div><dt>${m.k}</dt><dd>${m.text}</dd></div>`).join('')
 
 // ---------------------------------------------------------------- the classes, built once, then updated in place
 const chip = {}
@@ -493,7 +473,7 @@ try { $('group').value = localStorage.getItem('cut-group') || '' } catch {}
 $('group').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('send').click() })
 $('send').onclick = async () => {
 	const group = $('group').value.trim().slice(0, 30)
-	if (!group) { setMsg('Type a team name first, so you can find yourself on the board.', 'bad'); $('group').focus(); return }
+	if (!group) { setMsg('Type your name first, so you can find yourself on the board.', 'bad'); $('group').focus(); return }
 	try { localStorage.setItem('cut-group', group) } catch {}
 	const issues = problems()
 	if (issues.length && !armed) { armed = true; render(); setMsg(`Not a valid cut yet: ${issues[0][1]}. Tap “Send anyway” to send it as it is.`, 'bad'); return }
@@ -508,54 +488,6 @@ $('send').onclick = async () => {
 	finally { $('send').disabled = false }
 }
 
-// ---------------------------------------------------------------- the LLM exercise (outside game mode)
-const PROMPT = `You are a software architect. Decompose this Java monolith (Spring PetClinic) into microservices.
-
-Classes (package in brackets):
-${DATA.classes.map((c) => `- ${c} [${DATA.packages[c]}]`).join('\n')}
-
-Static dependencies (from -> to, weight):
-${DATA.edges.map(([s, t, , w]) => `${s} -> ${t} (${w})`).join('\n')}
-
-Rules: assign every class to exactly one service; use at least three services; do not invent classes.
-Answer with JSON only, in this shape:
-{"services": {"ServiceName": ["ClassA", "ClassB"]}}`
-$('prompt-text').value = PROMPT
-function setImport(items) { $('import-notes').innerHTML = items.map(([c, t]) => `<li class="${c}">${t}</li>`).join('') }
-$('copy-prompt').onclick = async () => {
-	try { await navigator.clipboard.writeText(PROMPT); setImport([['good', 'Prompt copied. Paste it into your chatbot.']]) }
-	catch { $('prompt-text').hidden = false; $('prompt-text').select(); setImport([['', 'Copying is blocked here: the prompt is selected above, copy it by hand.']]) }
-}
-$('copy-mine').onclick = async () => {
-	const txt = JSON.stringify({ services: decomposition() }, null, 1)
-	try { await navigator.clipboard.writeText(txt); setImport([['good', 'Your services are copied as JSON.']]) }
-	catch { $('paste').value = txt; $('paste').select(); setImport([['', 'Copying is blocked here: your JSON is in the box, selected.']]) }
-}
-$('apply').onclick = () => {
-	let raw = $('paste').value.trim().replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '')
-	const a = raw.indexOf('{'), b = raw.lastIndexOf('}')
-	if (a < 0 || b < a) return setImport([['bad', 'No JSON found. Paste the chatbot’s answer, the part between { and }.']])
-	let obj; try { obj = JSON.parse(raw.slice(a, b + 1)) } catch (err) { return setImport([['bad', 'That is not valid JSON: ' + esc(err.message)]]) }
-	const svcs = obj.services && typeof obj.services === 'object' ? obj.services : obj
-	const known = new Set(DATA.classes), seen = new Set(), issues = [], services = []
-	for (const [name, list] of Object.entries(svcs)) {
-		if (!Array.isArray(list)) continue
-		const keep = []
-		for (const c of list) {
-			const cls = String(c).split('.').pop().trim()
-			if (!known.has(cls)) issues.push(`unknown class “${esc(c)}” in ${esc(name)} (invented or misspelt)`)
-			else if (seen.has(cls)) issues.push(`${cls} appears twice (kept in its first service)`)
-			else { seen.add(cls); keep.push(cls) }
-		}
-		services.push({ name: String(name).slice(0, 30), classes: keep, color: services.length % PALETTE.length })
-	}
-	if (!services.length) return setImport([['bad', 'The JSON has no services. Expected {"services": {"Name": ["Class", …]}}.']])
-	const missing = DATA.classes.filter((c) => !seen.has(c))
-	if (missing.length) issues.push(`missing: ${missing.join(', ')}`)
-	state = { services, unassigned: missing, source: 'llm', sel: 0 }
-	setImport(issues.length ? issues.map((p) => ['bad', p]).concat([['bad', 'As returned, this answer is <b>not valid</b>. That happens to LLMs: run it again and compare.']]) : [['good', 'Every class placed exactly once. Its scores are in the bar below; send it to the board like your own cut.']])
-	changed()
-}
 
 render()
 </script>
