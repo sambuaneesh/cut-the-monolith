@@ -1,5 +1,6 @@
-// The class board's store. POST /cuts saves one submission (a group name and its decomposition) for a class room;
-// GET /cuts?room=… returns that room's submissions. Submissions expire after seven days. Nothing else is stored.
+// The class board's store. POST /cuts saves one submission (a player's name and their decomposition) for a class room;
+// GET /cuts?room=… returns that room's submissions. One submission per device per room: the page sends a random
+// device id (kept in the browser), and a second POST with the same id gets 409. Everything expires after seven days.
 const ORIGINS = ['https://sambuaneesh.github.io', 'http://localhost:8000', 'http://127.0.0.1:8000']
 const MAX_BYTES = 16000
 
@@ -35,8 +36,15 @@ export default {
 		if (req.method === 'POST') {
 			const text = await req.text()
 			if (text.length > MAX_BYTES) return json(req, { error: 'too large' }, 413)
-			let rec
-			try { const body = JSON.parse(text); rec = clean(body); rec.room = body.room } catch (e) { return json(req, { error: e.message }, 400) }
+			let rec, device
+			try {
+				const body = JSON.parse(text); rec = clean(body); rec.room = body.room
+				device = body.device
+				if (typeof device !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(device)) throw new Error('missing device id')
+			} catch (e) { return json(req, { error: e.message }, 400) }
+			const seen = `dev:${rec.room}:${device}`
+			if (await env.CUTS.get(seen)) return json(req, { error: 'already submitted' }, 409)
+			await env.CUTS.put(seen, '1', { expirationTtl: 7 * 24 * 3600 })
 			const key = `${rec.room}:${rec.at}:${crypto.randomUUID().slice(0, 8)}`
 			await env.CUTS.put(key, JSON.stringify(rec), { expirationTtl: 7 * 24 * 3600 })
 			return json(req, { ok: true })
