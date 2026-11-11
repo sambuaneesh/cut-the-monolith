@@ -4,45 +4,61 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Class Board · Cut the Monolith</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<meta name="theme-color" content="#ffffff">
 <style>
-/* Layout: a projector page. Top: counts. Middle: two charts side by side (stacked on narrow screens). Bottom: the LLM answers. */
+/* Layout: a projector page, white like the playground. Top: title and counts. Then the two leaderboards side by side,
+   the two charts side by side (stacked on narrow screens), and the LLM answers. */
 :root {
-	--bg: #eef1f6; --surface: #ffffff; --ink: #1d2a44; --muted: #5f6a7d; --line: #d5dbe5; --grid: #e7ebf2;
-	--hand: #1f7f71; --llm: #7a5ba8; --bad: #d62839; --ref: #8a94a6;
-	--display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif; --body: 'Inter', 'Segoe UI', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace;
+	--bg: #ffffff; --surface: #ffffff; --ink: #1d2a44; --muted: #667085; --line: #e4e7ec; --grid: #eef0f3; --soft: #f6f7f9;
+	--hand: #1f9e89; --llm: #7a5ba8; --bad: #d62839; --ref: #98a2b3;
+	--display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; --body: var(--display);
+	--mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+	color-scheme: light;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #121614; --surface: #1b211e; --ink: #e8ece9; --muted: #9aa59f; --line: #2e3632; --grid: #252c28; --hand: #4cc2b2; --llm: #ff8c42; --bad: #ff7a63; --ref: #7d857f; color-scheme: dark } }
-:root[data-theme="dark"] { --bg: #121614; --surface: #1b211e; --ink: #e8ece9; --muted: #9aa59f; --line: #2e3632; --grid: #252c28; --hand: #4cc2b2; --llm: #ff8c42; --bad: #ff7a63; --ref: #7d857f; color-scheme: dark }
 * { box-sizing: border-box }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); padding: 20px max(16px, env(safe-area-inset-right, 0px)) 30px max(16px, env(safe-area-inset-left, 0px)) }
-.wrap { max-width: 1600px; margin: 0 auto; display: grid; gap: 18px }
-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px }
-h1 { font: 700 clamp(28px, 4vw, 48px)/1.05 var(--display); margin: 0; letter-spacing: -0.02em }
+html { background: var(--bg) }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); line-height: 1.4; padding: 28px max(16px, env(safe-area-inset-right, 0px)) 36px max(16px, env(safe-area-inset-left, 0px)) }
+.wrap { max-width: 1600px; margin: 0 auto; display: grid; gap: 22px }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px }
+h1 { font: 700 clamp(28px, 4vw, 46px)/1.05 var(--display); margin: 0; letter-spacing: -0.02em }
 .counts { display: flex; flex-wrap: wrap; gap: 10px }
-.count { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; min-width: 120px }
-.count .k { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted) }
+.count { background: var(--soft); border-radius: 14px; padding: 10px 16px; min-width: 120px }
+.count .k { font-size: 13px; color: var(--muted) }
 .count .v { font: 700 30px var(--display); font-variant-numeric: tabular-nums }
-.charts { display: grid; gap: 18px }
+.charts { display: grid; gap: 22px }
 @media (min-width: 1000px) { .charts { grid-template-columns: 1.15fr 1fr } }
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0 }
-.panel h2 { font: 700 20px var(--display); margin: 0 0 4px }
-.panel p { margin: 0 0 8px; color: var(--muted); font-size: 14px }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px }
-.tabs button { font: 500 14px var(--body); border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer }
-.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink) }
-button:focus-visible { outline: 2px solid var(--hand); outline-offset: 2px }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; min-width: 0 }
+.panel h2 { font: 700 21px var(--display); margin: 0 0 6px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap }
+.panel h2 small { font-size: 15px; font-weight: 500; color: var(--muted) }
+.panel p { margin: 0 0 10px; color: var(--muted); font-size: 14.5px }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px }
+.tabs button { font: 500 14px var(--body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 7px 13px; cursor: pointer }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink) }
+button:focus-visible { outline: 3px solid color-mix(in srgb, var(--ink) 55%, transparent); outline-offset: 2px }
 svg { width: 100%; height: auto; display: block }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 6px }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-top: 8px }
 .legend span { display: inline-flex; align-items: center; gap: 6px }
 .legend svg { width: 16px; height: 16px; flex: none }
 .llm { display: grid; gap: 8px }
-.llm table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums }
-.llm th, .llm td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top }
+.boards { display: grid; gap: 22px }
+@media (min-width: 1000px) { .boards { grid-template-columns: 1.3fr 1fr } }
+.lb table { width: 100%; border-collapse: collapse; font-size: 20px; font-variant-numeric: tabular-nums }
+.lb th, .lb td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line) }
+.lb th { font-size: 13px; font-weight: 600; color: var(--muted) }
+.lb tr:last-child td { border-bottom: 0 }
+.lb td.n, .lb th.n { text-align: right; white-space: nowrap }
+.lb tr.top1 td { font-weight: 700 }
+.shame { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)) }
+.shame h2 { color: var(--bad) }
+.shame td b { color: var(--bad) }
+body.mystery .charts > section:nth-child(2), body.mystery .llm, body.mystery #tabs { display: none }
+.llm table { width: 100%; border-collapse: collapse; font-size: 14.5px; font-variant-numeric: tabular-nums }
+.llm th, .llm td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top }
+.llm th { font-size: 13px; font-weight: 600; color: var(--muted) }
 .llm td.n { text-align: right; white-space: nowrap }
 .llm code { font: 12.5px var(--mono); color: var(--muted) }
 .tablewrap { overflow-x: auto }
-.status { font-size: 13px; color: var(--muted) }
+.status { font-size: 14px; color: var(--muted); margin-top: 4px }
 </style>
 </head>
 <body>
@@ -51,6 +67,17 @@ svg { width: 100%; height: auto; display: block }
 		<div><h1>Class board</h1><div class="status" id="status">connecting…</div></div>
 		<div class="counts" id="counts"></div>
 	</header>
+	<div class="boards">
+		<section class="panel lb" aria-labelledby="h0c">
+			<h2 id="h0c">Top architects <small id="lb-metric"></small></h2>
+			<div class="tablewrap"><table id="lb-table"><tr><td>No cuts yet.</td></tr></table></div>
+		</section>
+		<section class="panel lb shame" aria-labelledby="h0s">
+			<h2 id="h0s">Thought you could get away with this??</h2>
+			<p>Cuts that break the rules (one or two services, or classes left out). Shown with their score, ranked nowhere.</p>
+			<div class="tablewrap"><table id="shame-table"><tr><td>Nobody. Yet.</td></tr></table></div>
+		</section>
+	</div>
 	<div class="charts">
 		<section class="panel" aria-labelledby="h1c">
 			<h2 id="h1c">Every cut: services against a score</h2>
@@ -80,7 +107,10 @@ const REF = [
 	{ group: 'our workflow (1 run)', kind: 'ref', scores: { n: 4, valid: true, cmod: 66.8, cid: 100, dtp: 83.9, di: 33.4, bcp: 33.3, c2c: 75.0 } },
 ]
 const METRICS = [['cmod', 'CMod'], ['di', 'DI'], ['bcp', 'BCP'], ['dtp', 'DTP'], ['cid', 'CiD'], ['c2c', 'C2C-50']]
-let metric = new URLSearchParams(location.search).get('metric') || 'cmod', rows = []
+const Q = new URLSearchParams(location.search), MYSTERY = Q.has('mystery')
+if (MYSTERY) document.body.classList.add('mystery')
+let metric = Q.get('metric') || 'cmod', rows = []
+const nameOf = (k) => MYSTERY ? 'mystery score' : METRICS.find(([m]) => m === k)[1]
 if (!['cmod', 'di', 'bcp', 'dtp', 'cid', 'c2c'].includes(metric)) metric = 'cmod'
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
@@ -120,14 +150,14 @@ function draw() {
 		const maxN = Math.max(8, ...all.map((r) => r.scores.n ?? 0))
 		const X = (n) => m.l + ((n - 0.5) / maxN) * (W - m.l - m.r), Y = (v) => H - m.b - (v / 100) * (H - m.t - m.b)
 		const xt = Array.from({ length: maxN }, (_, i) => [i + 1, X(i + 1)]), yt = [0, 25, 50, 75, 100].map((v) => [v, Y(v)])
-		let g = axes(W, H, m, xt, yt, 'number of services', METRICS.find(([k]) => k === metric)[1])
-		const label = all.length <= 30
+		let g = axes(W, H, m, xt, yt, 'number of services', nameOf(metric))
+		const topSet = new Set(all.filter((r) => r.kind !== 'ref' && r.scores.valid).sort((a, b) => b.scores[metric] - a.scores[metric]).slice(0, 5)); const label = all.length <= 15
 		for (const r of all) {
 			const v = r.scores[metric]; if (v == null) continue
 			const x = X(r.scores.n) + jit(r.group + r.at, 26), y = Y(v) + jit(r.at + r.group, 8)
 			const [sh, c] = style(r)
 			g += `<g>${mark(x, y, sh, c, r.kind === 'ref' ? 8 : 7)}<title>${esc(r.group)}: ${v}</title></g>`
-			if (label || r.kind === 'ref') g += `<text x="${x + 11}" y="${y + 4}" font-size="12" fill="${r.kind === 'ref' ? 'var(--muted)' : 'var(--ink)'}">${esc(r.group)}</text>`
+			if (label || r.kind === 'ref' || topSet.has(r)) g += `<text x="${x + 11}" y="${y + 4}" font-size="12" fill="${r.kind === 'ref' ? 'var(--muted)' : 'var(--ink)'}">${esc(r.group)}</text>`
 		}
 		$('c1').innerHTML = g
 	}
@@ -146,13 +176,26 @@ function draw() {
 			if (front.includes(r)) g += `<text x="${x + 11}" y="${y + 4}" font-size="12" fill="var(--ink)">${esc(r.group)}</text>` }
 		$('c2').innerHTML = g
 	}
+	// the leaderboards: valid cuts ranked on the chosen score; rule-breakers (e.g. everything in one service) shamed apart
+	{
+		const name = nameOf(metric)
+		$('lb-metric').textContent = 'by ' + name
+		const scored = rows.filter((r) => r.scores[metric] != null)
+		const ok = scored.filter((r) => r.scores.valid).sort((a, b) => b.scores[metric] - a.scores[metric]).slice(0, 10)
+		const bad = scored.filter((r) => !r.scores.valid).sort((a, b) => b.scores[metric] - a.scores[metric])
+		const medal = (i) => ['🥇', '🥈', '🥉'][i] ?? String(i + 1)
+		if (ok.length) $('lb-table').innerHTML = '<tr><th>#</th><th>team</th><th class="n">' + esc(name) + '</th><th class="n">services</th></tr>' + ok.map((r, i) =>
+			`<tr class="${i ? '' : 'top1'}"><td>${medal(i)}</td><td>${esc(r.group)}${r.kind === 'llm' ? ' <code>LLM</code>' : ''}</td><td class="n">${r.scores[metric]}</td><td class="n">${r.scores.n}</td></tr>`).join('')
+		if (bad.length) $('shame-table').innerHTML = '<tr><th>team</th><th class="n">' + esc(name) + '</th><th>why not</th></tr>' + bad.slice(0, 8).map((r) =>
+			`<tr><td>${esc(r.group)}</td><td class="n"><b>${r.scores[metric]}</b></td><td>${r.scores.n < 3 ? (r.scores.n === 1 ? 'one service = the monolith 🙃' : 'only ' + r.scores.n + ' services') : 'classes left out'}</td></tr>`).join('') + (bad.length > 8 ? `<tr><td colspan="3">…and ${bad.length - 8} more</td></tr>` : '')
+	}
 	// counts and the LLM table
 	const hand = rows.filter((r) => r.kind !== 'llm'), llm = rows.filter((r) => r.kind === 'llm'), llmValid = llm.filter((r) => r.scores.valid)
 	const key = (r) => Object.values(r.services).map((cs) => [...cs].sort().join(',')).sort().join(' | ')
 	const groups = {}
 	for (const r of llm) (groups[key(r)] ??= []).push(r)
 	const distinct = Object.values(groups).sort((a, b) => b.length - a.length)
-	$('counts').innerHTML = [['cuts by hand', hand.length], ['LLM answers', llm.length], ['LLM answers valid', llm.length ? `${llmValid.length}/${llm.length}` : '–'], ['different LLM splits', llm.length ? distinct.length : '–']]
+	$('counts').innerHTML = (MYSTERY ? [['teams', hand.length], ['rule-breakers', hand.filter((r) => !r.scores.valid).length]] : [['cuts by hand', hand.length], ['LLM answers', llm.length], ['LLM answers valid', llm.length ? `${llmValid.length}/${llm.length}` : '–'], ['different LLM splits', llm.length ? distinct.length : '–']])
 		.map(([k, v]) => `<div class="count"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')
 	if (llm.length) {
 		$('llm-sum').textContent = `${llm.length} answers to the same prompt gave ${distinct.length} different split${distinct.length === 1 ? '' : 's'}; ${llm.length - llmValid.length} ${llm.length - llmValid.length === 1 ? 'was' : 'were'} not valid as returned.`
@@ -167,7 +210,9 @@ async function poll() {
 	try {
 		const r = await fetch(`${BOARD}/cuts?room=${encodeURIComponent(ROOM)}`, { cache: 'no-store' })
 		if (!r.ok) throw new Error(r.status)
-		rows = await r.json()
+		const latest = new Map()
+		for (const x of await r.json()) { const o = latest.get(x.group); if (!o || Number(x.at) > Number(o.at)) latest.set(x.group, x) }
+		rows = [...latest.values()]
 		$('status').textContent = `room “${ROOM}” · updated ${new Date().toLocaleTimeString()}`
 	} catch (e) { $('status').textContent = 'cannot reach the board, retrying…' }
 	draw()
