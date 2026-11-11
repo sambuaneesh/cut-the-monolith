@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Cut the Monolith</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column on phones (scores, graph, services, tools); two columns on wide screens (graph + scores | services). */
+:root {
+	--bg: #f3f4f1; --surface: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #d6dbd7;
+	--accent: #0f6e63; --cut: #c2412d; --ok: #1d7a46; --warn: #b26a00;
+	--display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+	--body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+	--mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+	--s1: #0072b2; --s2: #d55e00; --s3: #009e73; --s4: #cc79a7; --s5: #8a6d00; --s6: #56b4e9; --s7: #7b3294; --s8: #6b7a00;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+	--bg: #121614; --surface: #1b211e; --ink: #e8ece9; --muted: #9aa59f; --line: #2e3632;
+	--accent: #4cc2b2; --cut: #ff7a63; --ok: #5cd08f; --warn: #e3a84a;
+	--s1: #56b4e9; --s2: #ff8c42; --s3: #3fd3a6; --s4: #e79ac8; --s5: #e0c040; --s6: #8fd1f5; --s7: #b98be0; --s8: #b9c94a; color-scheme: dark } }
+:root[data-theme="dark"] {
+	--bg: #121614; --surface: #1b211e; --ink: #e8ece9; --muted: #9aa59f; --line: #2e3632;
+	--accent: #4cc2b2; --cut: #ff7a63; --ok: #5cd08f; --warn: #e3a84a;
+	--s1: #56b4e9; --s2: #ff8c42; --s3: #3fd3a6; --s4: #e79ac8; --s5: #e0c040; --s6: #8fd1f5; --s7: #b98be0; --s8: #b9c94a; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45;
+	padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 40px }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 18px }
+header h1 { font-family: var(--display); font-size: clamp(28px, 6vw, 44px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch }
+.grid { display: grid; gap: 18px }
+@media (min-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0 }
+.panel h2 { font-family: var(--display); font-size: 17px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px }
+.panel h2 small { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--muted) }
+/* scores */
+.scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px }
+.score { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--bg); text-align: left; font: inherit; color: inherit; cursor: pointer; min-width: 0 }
+.score:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.score .k { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted) }
+.score .v { font-family: var(--display); font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.15 }
+.score .v.good { color: var(--ok) } .score .v.bad { color: var(--cut) }
+.score[aria-pressed="true"] { border-color: var(--accent) }
+.explain { margin-top: 10px; font-size: 14px; color: var(--ink); background: var(--bg); border-radius: 10px; padding: 10px 12px; border: 1px dashed var(--line) }
+.explain b { font-family: var(--display) }
+.flags { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13.5px }
+.flags li::before { content: '•'; color: var(--cut); margin-right: 6px }
+.flags li.ok::before { content: '✓'; color: var(--ok) }
+/* graph */
+svg { width: 100%; height: auto; display: block }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin-top: 6px }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--muted); vertical-align: middle; margin-right: 6px }
+.legend i.cut { border-top: 2px dashed var(--cut) }
+/* services */
+.services { display: grid; gap: 10px }
+.svc { border: 1px solid var(--line); border-radius: 10px; padding: 10px; border-left-width: 5px }
+.svc header { display: flex; gap: 8px; align-items: center; margin-bottom: 8px }
+.svc input { font: 600 15px var(--display); border: 0; background: transparent; color: var(--ink); min-width: 0; flex: 1; padding: 2px 0 }
+.svc input:focus-visible { outline: none; border-bottom: 2px solid var(--accent) }
+.svc .n { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px }
+.chip { font: 500 13px var(--mono); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 10px; cursor: pointer }
+.chip:hover { border-color: var(--accent) }
+.chip.sel { background: var(--accent); color: var(--surface); border-color: var(--accent) }
+.empty { color: var(--muted); font-size: 13px; padding: 4px 2px }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button.btn { font: 500 14px var(--body); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 8px 12px; cursor: pointer }
+button.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent) }
+button.btn:hover { border-color: var(--accent) }
+/* move sheet */
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -8px 30px rgba(0,0,0,0.18);
+	padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); border-radius: 16px 16px 0 0 }
+.sheet .inner { max-width: 720px; margin: 0 auto; display: grid; gap: 10px }
+.sheet .title { font-family: var(--display); font-size: 16px }
+.sheet .title code { font-family: var(--mono); color: var(--accent) }
+.sheet .deps { font-size: 13px; color: var(--muted) }
+.dest { display: flex; flex-wrap: wrap; gap: 8px }
+.dest button { border-left-width: 5px }
+textarea { width: 100%; min-height: 120px; font: 13px var(--mono); border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--bg); color: var(--ink); resize: vertical }
+.note { font-size: 13px; color: var(--muted) }
+.msg { font-size: 13.5px; margin: 0 }
+.msg.bad { color: var(--cut) } .msg.good { color: var(--ok) }
+details summary { cursor: pointer; font-family: var(--display); font-weight: 700 }
+.ref { display: grid; gap: 8px; margin-top: 10px }
+.ref .shared { background: color-mix(in srgb, var(--warn) 22%, transparent); border-color: var(--warn) }
+.compare { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums }
+.compare th, .compare td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap }
+.compare th:first-child, .compare td:first-child { text-align: left }
+.tablewrap { overflow-x: auto }
+@media (prefers-reduced-motion: no-preference) { .score .v { transition: color 200ms } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+	<header>
+		<h1>Cut the Monolith</h1>
+		<p>Spring PetClinic has 23 classes. Group them into services: tap a class, then pick where it goes. The scores update as you cut.</p>
+	</header>
+
+	<section class="panel" aria-labelledby="h-scores">
+		<h2 id="h-scores">Scores <small>tap one to see what it means</small></h2>
+		<div class="scores" id="scores"></div>
+		<div class="explain" id="explain"></div>
+		<ul class="flags" id="flags"></ul>
+	</section>
+
+	<div class="grid">
+		<section class="panel" aria-labelledby="h-graph">
+			<h2 id="h-graph">Dependencies <small id="edge-count"></small></h2>
+			<svg id="graph" viewBox="0 0 520 400" role="img" aria-label="Classes grouped by service, with dependencies between them"></svg>
+			<div class="legend"><span><i></i>inside a service</span><span><i class="cut"></i>crosses services (the network)</span></div>
+		</section>
+
+		<section class="panel" aria-labelledby="h-svcs">
+			<h2 id="h-svcs">Your services <small id="svc-count"></small></h2>
+			<div class="row" style="margin-bottom:10px">
+				<button class="btn" id="add-svc">Add service</button>
+				<label class="note" for="preset">Start from</label>
+				<select id="preset" class="btn">
+					<option value="">choose…</option>
+					<option value="packages">the Java packages</option>
+					<option value="one">one big service</option>
+					<option value="workflow">our agentic workflow's answer</option>
+					<option value="blank">nothing (all unassigned)</option>
+				</select>
+			</div>
+			<div class="services" id="services"></div>
+		</section>
+	</div>
+
+	<section class="panel" aria-labelledby="h-llm">
+		<h2 id="h-llm">Ask an LLM <small>then score its answer here</small></h2>
+		<div class="row">
+			<button class="btn primary" id="copy-prompt">Copy the prompt</button>
+			<span class="note">Paste it into ChatGPT, Claude or any chatbot. Then paste its answer below.</span>
+		</div>
+		<textarea id="prompt-text" readonly aria-label="Prompt for the LLM" hidden></textarea>
+		<p class="msg" id="copy-msg"></p>
+		<label class="note" for="paste">The LLM's answer (JSON)</label>
+		<textarea id="paste" placeholder='{"services": {"Owners": ["Owner", "OwnerController", …], …}}'></textarea>
+		<div class="row"><button class="btn primary" id="apply">Score this answer</button><button class="btn" id="copy-mine">Copy my services as JSON</button></div>
+		<ul class="flags" id="import-flags"></ul>
+	</section>
+
+	<section class="panel" aria-labelledby="h-ref">
+		<details>
+			<summary id="h-ref">The developers' own answer</summary>
+			<p class="note">The PetClinic team's microservice version has customers, vets and visits. Shared classes (highlighted) are copied into several services, so it is not a clean partition: no cut you make can match it exactly.</p>
+			<div class="ref" id="ref"></div>
+			<div class="tablewrap" style="margin-top:12px"><table class="compare" id="compare"></table></div>
+		</details>
+	</section>
+</div>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="false" aria-labelledby="sheet-title">
+	<div class="inner">
+		<div class="title" id="sheet-title"></div>
+		<div class="deps" id="sheet-deps"></div>
+		<div class="dest" id="sheet-dest"></div>
+		<div class="row"><button class="btn" id="sheet-close">Cancel</button></div>
+	</div>
+</div>
+
+<script>
+const DATA = {"classes":["PetClinicRuntimeHints","PetClinicApplication","Vet","Specialty","VetController","VetRepository","Vets","Pet","VisitController","PetTypeFormatter","OwnerRepository","OwnerController","PetController","PetValidator","Owner","Visit","PetType","WelcomeController","CacheConfiguration","CrashController","BaseEntity","Person","NamedEntity"],"packages":{"PetClinicApplication":"petclinic","PetClinicRuntimeHints":"petclinic","BaseEntity":"model","NamedEntity":"model","Person":"model","Owner":"owner","OwnerController":"owner","OwnerRepository":"owner","Pet":"owner","PetController":"owner","PetType":"owner","PetTypeFormatter":"owner","PetValidator":"owner","Visit":"owner","VisitController":"owner","CacheConfiguration":"system","CrashController":"system","WelcomeController":"system","Specialty":"vet","Vet":"vet","VetController":"vet","VetRepository":"vet","Vets":"vet"},"edges":[["NamedEntity","BaseEntity",1],["Person","BaseEntity",1],["Owner","Person",1],["Owner","Pet",6],["OwnerController","Owner",7],["OwnerController","OwnerRepository",6],["Pet","NamedEntity",1],["PetController","OwnerRepository",5],["PetController","Owner",6],["PetController","Pet",4],["PetController","PetValidator",1],["PetType","NamedEntity",1],["PetTypeFormatter","OwnerRepository",1],["PetTypeFormatter","PetType",2],["PetValidator","Pet",4],["Visit","BaseEntity",1],["VisitController","Owner",2],["VisitController","OwnerRepository",2],["VisitController","Pet",1],["VisitController","Visit",1],["Specialty","NamedEntity",1],["Vet","Person",1],["VetController","VetRepository",2],["VetController","Vets",4]],"reference":{"customers":["BaseEntity","NamedEntity","Owner","OwnerController","OwnerRepository","Person","Pet","PetClinicApplication","PetController","PetType","PetValidator"],"uncounted":["CrashController","PetClinicRuntimeHints","PetTypeFormatter","WelcomeController"],"vets":["CacheConfiguration","PetClinicApplication","Specialty","Vet","VetController","VetRepository","Vets","BaseEntity","NamedEntity","Person"],"visits":["BaseEntity","NamedEntity","Person","PetClinicApplication","Visit","VisitController"]},"tables":{"OWNERS":["Owner","OwnerController","OwnerRepository","PetController","VisitController"],"PETS":["Owner","OwnerController","OwnerRepository","Pet","PetController","PetValidator","VisitController"],"SPECIALTIES":["Specialty"],"TYPES":["OwnerRepository","Pet","PetController","PetType","PetTypeFormatter","PetValidator"],"VET_SPECIALTIES":["Vet"],"VETS":["Vet","VetController","VetRepository","Vets"],"VISITS":["Owner","Pet","Visit","VisitController"]},"usecases":{"Owner":["BaseEntity","NamedEntity","Owner","OwnerController","Person","Pet","Visit"],"Pet":["BaseEntity","NamedEntity","Owner","Person","Pet","PetController","PetTypeFormatter","PetValidator"],"Visit":["BaseEntity","NamedEntity","Owner","Person","Pet","Visit","VisitController"],"Vet":["BaseEntity","NamedEntity","Person","Vet","VetController","Vets"]},"workflow":{"OwnerPetVisitService":["Owner","OwnerController","OwnerRepository","Pet","PetController","PetType","PetTypeFormatter","PetValidator","VisitController"],"VetService":["VetController","VetRepository","Vets"],"SystemInfrastructureService":["PetClinicApplication","PetClinicRuntimeHints","CacheConfiguration","WelcomeController","CrashController"],"DomainFoundationService":["BaseEntity","NamedEntity","Person","Vet","Specialty","Visit"]},"workflowMetrics":{"CiD":100,"CMod":66.83673469387756,"TC":27.22556492736575,"LC":31.213141657459865,"c2c_cvg 10%":100,"c2c_cvg 33%":75,"c2c_cvg 50%":75,"DTP":83.93328158231976,"DI":33.40265960365654,"BCP":33.333333333333336,"partition_count":4,"completeness":100}}
+DATA.edges = DATA.edges.map(([a, b, w]) => [a, b, 'dep', w]) // the benchmark graph: [from, to, weight]
+const COLORS = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8']
+const UNASSIGNED = '__unassigned'
+
+// ---------------------------------------------------------------- metrics (same definitions as the study's code)
+function ownerOf(dec) { const o = {}; for (const [s, cs] of Object.entries(dec)) for (const c of cs) o[c] = s; return o }
+function cmod(dec) {
+	const own = ownerOf(dec), names = Object.keys(dec); if (!names.length) return 0
+	let cf = 0
+	for (const n of names) {
+		const set = new Set(dec[n]); let i = 0, e = 0
+		for (const [s, t, , w = 1] of DATA.edges) { if (!(s in own) || !(t in own)) continue; if (set.has(s) && set.has(t)) i += w; else if (set.has(s) || set.has(t)) e += w }
+		cf += i > 0 ? (2 * i) / (2 * i + e) : 0
+	}
+	return (cf / names.length) * 100
+}
+function cid(dec) {
+	const own = ownerOf(dec), names = Object.keys(dec), dep = new Set()
+	for (const [s, t] of DATA.edges) if (s in own && t in own && own[s] !== own[t]) dep.add(own[s] + '→' + own[t])
+	let total = 0, cyc = 0, pairs = []
+	for (const a of names) for (const b of names) { if (a === b) continue; total++; if (dep.has(a + '→' + b) && dep.has(b + '→' + a)) { cyc++; if (a < b) pairs.push([a, b]) } }
+	return { value: total ? 100 - (cyc / total) * 100 : 100, pairs }
+}
+function overlap(a, b) { const B = new Set(b); return a.filter((x) => B.has(x)).length / Math.max(a.length, b.length) }
+function c2c(dec, th) {
+	const rows = Object.entries(dec); if (!rows.length) return 0
+	return (rows.filter(([, cs]) => Object.values(DATA.reference).some((r) => overlap(cs, r) > th)).length / rows.length) * 100
+}
+function clippedEntropy(counts) {
+	const n = counts.reduce((a, b) => a + b, 0); if (!n) return 0
+	return Math.min(1, -counts.filter((c) => c > 0).reduce((s, c) => s + (c / n) * Math.log(c / n), 0))
+}
+// DTP (tables) and DI (use cases): how spread each label's classes are across services.
+function labelPurity(dec, labels) {
+	const own = ownerOf(dec), rows = Object.values(labels).map((cs) => {
+		const per = {}; for (const c of new Set(cs)) if (c in own) per[own[c]] = (per[own[c]] ?? 0) + 1
+		return clippedEntropy(Object.values(per))
+	})
+	return (1 - rows.reduce((s, h) => s + h, 0) / rows.length) * 100
+}
+// BCP: how many different use cases each service's classes take part in.
+function bcp(dec, labels) {
+	const byClass = {}; for (const [l, cs] of Object.entries(labels)) for (const c of new Set(cs)) (byClass[c] ??= []).push(l)
+	const hs = []
+	for (const cs of Object.values(dec)) {
+		const uses = cs.flatMap((c) => byClass[c] ?? []); if (!uses.length) continue
+		const counts = {}; for (const u of uses) counts[u] = (counts[u] ?? 0) + 1
+		hs.push(clippedEntropy(Object.values(counts)))
+	}
+	return hs.length ? (1 - hs.reduce((a, b) => a + b, 0) / hs.length) * 100 : 0
+}
+function crossing(dec) {
+	const own = ownerOf(dec); let n = 0
+	for (const [s, t, , w = 1] of DATA.edges) if (s in own && t in own && own[s] !== own[t]) n += w
+	return n
+}
+
+// ---------------------------------------------------------------- state
+let state = load() ?? fromPreset('packages')
+let selected = null, focusMetric = 'valid'
+function load() { try { const s = JSON.parse(localStorage.getItem('cut-the-monolith') || 'null'); return s && s.services ? s : null } catch { return null } }
+function save() { try { localStorage.setItem('cut-the-monolith', JSON.stringify(state)) } catch {} }
+function fromPreset(p) {
+	if (p === 'one') return { services: [{ name: 'PetClinic', classes: [...DATA.classes] }] }
+	if (p === 'blank') return { services: [{ name: 'Service A', classes: [] }, { name: 'Service B', classes: [] }, { name: 'Service C', classes: [] }], unassigned: [...DATA.classes] }
+	if (p === 'workflow') return { services: Object.entries(DATA.workflow).map(([name, classes]) => ({ name, classes: [...classes] })) }
+	const by = {}
+	for (const c of DATA.classes) (by[DATA.packages[c]] ??= []).push(c)
+	return { services: Object.entries(by).map(([name, classes]) => ({ name: name + ' package', classes })) }
+}
+function decomposition() { const d = {}; for (const s of state.services) if (s.classes.length) d[s.name] = s.classes; return d }
+function unassigned() { return state.unassigned ?? [] }
+
+// ---------------------------------------------------------------- explanations
+const METRICS = {
+	valid: { k: 'Valid', text: 'A decomposition is <b>valid</b> when every class sits in exactly one service, no service is empty, and there are at least three services. Any tool, or LLM, has to pass this before its other scores mean anything.' },
+	n: { k: 'Services', text: '<b>How many services.</b> Not good or bad by itself, but watch it: several scores rise just because you made fewer, bigger services. Try "one big service" and see.' },
+	cmod: { k: 'CMod', text: '<b>Modularity.</b> For each service: how much of its dependency weight stays inside it, against what crosses to other services. Average over services, 0–100. Every dashed red line on the graph costs CMod. <i>The trap:</i> one service has no crossing lines, so it scores 100.' },
+	cid: { k: 'CiD', text: '<b>Cyclic independence.</b> If service A calls B and B calls A, neither can change or deploy alone: they are a <i>distributed monolith</i>. CiD is the share of service pairs without such a two-way dependency, 0–100.' },
+	dtp: { k: 'DTP', text: '<b>Database transaction purity.</b> For each database table: are the classes that touch it kept in one service? A table spread over services means shared data and distributed transactions, the hardest part of any split. 0–100.' },
+	di: { k: 'DI', text: '<b>Domain independence.</b> For each business use case (owners, pets, visits, vets): are its classes in one service, or does the use case hop across services? 0–100, from recorded traces of the use cases.' },
+	bcp: { k: 'BCP', text: '<b>Business context purity.</b> The other direction: does each service serve one use case, or a mix? A service mixing many use cases has no clear business purpose. 0–100.' },
+	cut: { k: 'Crossings', text: '<b>Dependency weight that crosses services.</b> Each one becomes a network call (or shared code) after the split: slower, can fail, needs an API. Fewer is cheaper to run and maintain.' },
+	c2c: { k: 'C2C-50', text: '<b>Similarity to the developers’ answer.</b> The share of your services that overlap more than 50% with some service of the PetClinic team’s own microservice version. It compares with one answer, and that answer copies shared classes into several services, so treat it as a hint, not a grade.' },
+}
+
+// ---------------------------------------------------------------- render
+const $ = (id) => document.getElementById(id)
+function colorOf(i) { return `var(${COLORS[i % COLORS.length]})` }
+
+function render() {
+	const dec = decomposition()
+	const names = Object.keys(dec)
+	const nonEmpty = names.length
+	const missing = unassigned()
+	const valid = missing.length === 0 && nonEmpty >= 3 && state.services.every((s) => s.classes.length > 0)
+	const dtp = nonEmpty ? labelPurity(dec, DATA.tables) : 0, di = nonEmpty ? labelPurity(dec, DATA.usecases) : 0, bc = nonEmpty ? bcp(dec, DATA.usecases) : 0
+	const cm = nonEmpty ? cmod(dec) : 0, ci = nonEmpty ? cid(dec) : { value: 0, pairs: [] }, cc = c2c(dec, 0.5), cr = crossing(dec)
+	const tiles = [
+		['valid', valid ? 'yes' : 'no', valid ? 'good' : 'bad'],
+		['n', String(nonEmpty), ''],
+		['cmod', cm.toFixed(1), ''],
+		['cid', ci.value.toFixed(1), ci.value < 100 ? 'bad' : ''],
+		['dtp', dtp.toFixed(1), ''],
+		['di', di.toFixed(1), ''],
+		['bcp', bc.toFixed(1), ''],
+		['cut', String(cr), ''],
+		['c2c', cc.toFixed(1), ''],
+	]
+	$('scores').innerHTML = tiles.map(([id, v, cls]) => `<button class="score" data-m="${id}" aria-pressed="${focusMetric === id}"><div class="k">${METRICS[id].k}</div><div class="v ${cls}">${v}</div></button>`).join('')
+	$('explain').innerHTML = METRICS[focusMetric].text
+	const flags = []
+	if (missing.length) flags.push(`${missing.length} class${missing.length > 1 ? 'es are' : ' is'} not in any service yet`)
+	if (nonEmpty < 3) flags.push(`only ${nonEmpty} service${nonEmpty === 1 ? '' : 's'}: a valid split needs at least three`)
+	if (state.services.some((s) => !s.classes.length)) flags.push('an empty service: give it classes or delete it')
+	for (const [a, b] of ci.pairs.slice(0, 4)) flags.push(`${a} and ${b} depend on each other both ways`)
+	if (nonEmpty === 1) flags.push('one service scores 100 on CMod, CiD, DTP and DI, yet nothing was split: metrics can be gamed. Only BCP drops, to 0')
+	$('flags').innerHTML = flags.length ? flags.map((f) => `<li>${f}</li>`).join('') : '<li class="ok">valid, and no two-way dependencies between services</li>'
+
+	$('svc-count').textContent = `${nonEmpty} with classes · ${missing.length} unassigned`
+	const svcHtml = []
+	if (missing.length) svcHtml.push(serviceCard({ name: 'Not assigned yet', classes: missing }, -1, true))
+	state.services.forEach((s, i) => svcHtml.push(serviceCard(s, i, false)))
+	$('services').innerHTML = svcHtml.join('')
+	drawGraph(dec)
+	renderCompare(cm, ci.value, cc, nonEmpty, dtp, di)
+	save()
+}
+function serviceCard(s, i, isTray) {
+	const col = isTray ? 'var(--line)' : colorOf(i)
+	const chips = s.classes.map((c) => `<button class="chip${selected === c ? ' sel' : ''}" data-c="${c}">${c}</button>`).join('')
+	return `<div class="svc" style="border-left-color:${col}">
+		<header>${isTray ? `<strong style="flex:1">${s.name}</strong>` : `<input id="svc-name-${i}" data-i="${i}" value="${escapeAttr(s.name)}" aria-label="Service name">`}
+		<span class="n">${s.classes.length}</span>${isTray ? '' : `<button class="btn" data-del="${i}" aria-label="Delete ${escapeAttr(s.name)}" style="padding:4px 9px">✕</button>`}</header>
+		<div class="chips">${chips || '<span class="empty">empty: tap a class elsewhere and move it here</span>'}</div></div>`
+}
+function escapeAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') }
+
+// Graph: services spread on a circle, each service's classes in a small ring around its centre.
+function drawGraph(dec) {
+	const svg = $('graph'), W = 520, H = 400, groups = Object.entries(dec)
+	if (unassigned().length) groups.push(['Not assigned yet', unassigned()])
+	const pos = {}, svcIndex = {}
+	const R = groups.length > 1 ? 140 : 0
+	groups.forEach(([name, cs], gi) => {
+		const a = (gi / groups.length) * Math.PI * 2 - Math.PI / 2
+		const cx = W / 2 + R * Math.cos(a) * 1.15, cy = H / 2 + R * Math.sin(a) * 0.95
+		const r = cs.length > 1 ? Math.min(groups.length > 1 ? 58 : 150, 10 + cs.length * 6) : 0
+		cs.forEach((c, k) => { const b = (k / cs.length) * Math.PI * 2; pos[c] = [cx + r * Math.cos(b), cy + r * Math.sin(b)]; svcIndex[c] = name === 'Not assigned yet' ? -1 : state.services.findIndex((s) => s.name === name) })
+	})
+	const own = ownerOf(dec)
+	const lines = DATA.edges.filter(([s, t]) => pos[s] && pos[t] && s !== t).map(([s, t, , w]) => {
+		const cut = own[s] !== own[t] || !(s in own) || !(t in own)
+		const [x1, y1] = pos[s], [x2, y2] = pos[t]
+		return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${cut ? 'var(--cut)' : 'var(--muted)'}" stroke-width="${Math.min(3, 0.8 + Math.log2(w + 1) * 0.5).toFixed(2)}" stroke-opacity="${cut ? 0.75 : 0.45}" ${cut ? 'stroke-dasharray="4 3"' : ''}/>`
+	}).join('')
+	const dots = Object.entries(pos).map(([c, [x, y]]) => {
+		const i = svcIndex[c], fill = i < 0 ? 'var(--surface)' : colorOf(i)
+		return `<g data-c="${c}" style="cursor:pointer"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${selected === c ? 8 : 6}" fill="${fill}" stroke="var(--ink)" stroke-width="${selected === c ? 2 : 0.8}"/><title>${c}</title></g>`
+	}).join('')
+	const labels = groups.map(([name, cs]) => {
+		const xs = cs.map((c) => pos[c][0]), ys = cs.map((c) => pos[c][1])
+		const x = xs.reduce((a, b) => a + b, 0) / xs.length, y = Math.min(...ys) - 12
+		return `<text x="${x.toFixed(1)}" y="${Math.max(12, y).toFixed(1)}" text-anchor="middle" font-size="12" font-family="var(--display)" fill="var(--ink)">${escapeAttr(name.length > 22 ? name.slice(0, 21) + '…' : name)}</text>`
+	}).join('')
+	svg.innerHTML = lines + dots + labels
+}
+
+function renderCompare(cm, ci, cc, n, dtp, di) {
+	const wf = DATA.workflowMetrics
+	$('compare').innerHTML = `<tr><th></th><th>services</th><th>CMod</th><th>CiD</th><th>DTP</th><th>DI</th><th>C2C-50</th></tr>
+		<tr><td>Your cut</td><td>${n}</td><td>${cm.toFixed(1)}</td><td>${ci.toFixed(1)}</td><td>${dtp.toFixed(1)}</td><td>${di.toFixed(1)}</td><td>${cc.toFixed(1)}</td></tr>
+		<tr><td>Our agentic workflow (one run)</td><td>${wf.partition_count}</td><td>${wf.CMod.toFixed(1)}</td><td>${wf.CiD.toFixed(1)}</td><td>${wf.DTP.toFixed(1)}</td><td>${wf.DI.toFixed(1)}</td><td>${wf['c2c_cvg 50%'].toFixed(1)}</td></tr>`
+	const shared = new Set(Object.entries(DATA.reference).flatMap(([n, cs]) => cs).filter((c, i, a) => a.indexOf(c) !== i))
+	$('ref').innerHTML = Object.entries(DATA.reference).map(([name, cs]) => `<div><strong style="font-family:var(--display)">${name === 'uncounted' ? 'not in any service' : name}</strong>
+		<div class="chips">${cs.map((c) => `<span class="chip${shared.has(c) ? ' shared' : ''}" style="cursor:default">${c}</span>`).join('')}</div></div>`).join('')
+}
+
+// ---------------------------------------------------------------- moving classes
+function openSheet(c) {
+	selected = c
+	const from = state.services.find((s) => s.classes.includes(c))
+	const deps = DATA.edges.filter(([s, t]) => s === c || t === c).map(([s, t]) => (s === c ? t : s))
+	const uniq = [...new Set(deps)]
+	$('sheet-title').innerHTML = `Move <code>${c}</code> ${from ? `from ${escapeAttr(from.name)} ` : ''}to…`
+	$('sheet-deps').textContent = uniq.length ? `Depends on or is used by: ${uniq.join(', ')}` : 'No static dependencies.'
+	$('sheet-dest').innerHTML = state.services.map((s, i) => `<button class="btn" data-to="${i}" style="border-left-color:${colorOf(i)}"${s === from ? ' disabled' : ''}>${escapeAttr(s.name)}</button>`).join('') + '<button class="btn primary" data-to="new">New service</button>'
+	$('sheet').hidden = false
+	render()
+}
+function closeSheet() { selected = null; $('sheet').hidden = true; render() }
+function moveTo(c, to) {
+	for (const s of state.services) s.classes = s.classes.filter((x) => x !== c)
+	if (state.unassigned) state.unassigned = state.unassigned.filter((x) => x !== c)
+	if (to === 'new') { state.services.push({ name: `Service ${String.fromCharCode(65 + state.services.length % 26)}`, classes: [c] }) }
+	else state.services[+to].classes.push(c)
+	closeSheet()
+}
+
+document.addEventListener('click', (e) => {
+	const m = e.target.closest('[data-m]'); if (m) { focusMetric = m.dataset.m; render(); return }
+	const to = e.target.closest('[data-to]'); if (to && selected) { moveTo(selected, to.dataset.to); return }
+	const chip = e.target.closest('[data-c]'); if (chip && !chip.closest('#ref')) { openSheet(chip.dataset.c); return }
+	const del = e.target.closest('[data-del]')
+	if (del) { const s = state.services.splice(+del.dataset.del, 1)[0]; state.unassigned = [...unassigned(), ...s.classes]; render(); return }
+})
+document.addEventListener('input', (e) => { if (e.target.matches('input[data-i]')) { state.services[+e.target.dataset.i].name = e.target.value || 'Unnamed'; save() } })
+document.addEventListener('change', (e) => { if (e.target.matches('input[data-i]')) render() })
+$('sheet-close').onclick = closeSheet
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet() })
+$('add-svc').onclick = () => { state.services.push({ name: `Service ${String.fromCharCode(65 + state.services.length % 26)}`, classes: [] }); render() }
+$('preset').onchange = (e) => { if (e.target.value) { state = fromPreset(e.target.value); e.target.value = ''; focusMetric = state.services.length === 1 ? 'cmod' : focusMetric; render() } }
+
+// ---------------------------------------------------------------- the LLM exercise
+const PROMPT = `You are a software architect. Decompose this Java monolith (Spring PetClinic) into microservices.
+
+Classes (package in brackets):
+${DATA.classes.map((c) => `- ${c} [${DATA.packages[c]}]`).join('\n')}
+
+Static dependencies (from -> to, weight):
+${DATA.edges.map(([s, t, , w]) => `${s} -> ${t} (${w})`).join('\n')}
+
+Rules: assign every class to exactly one service; use at least three services; do not invent classes.
+Answer with JSON only, in this shape:
+{"services": {"ServiceName": ["ClassA", "ClassB"]}}`
+$('prompt-text').value = PROMPT
+$('copy-prompt').onclick = async () => {
+	try { await navigator.clipboard.writeText(PROMPT); $('copy-msg').textContent = 'Prompt copied. Paste it into your chatbot.'; $('copy-msg').className = 'msg good' }
+	catch { $('prompt-text').hidden = false; $('prompt-text').select(); $('copy-msg').textContent = 'Copying is blocked here: the prompt is selected below, copy it by hand.'; $('copy-msg').className = 'msg' }
+}
+$('copy-mine').onclick = async () => {
+	const txt = JSON.stringify({ services: decomposition() }, null, 1)
+	try { await navigator.clipboard.writeText(txt); setImport([['good', 'Your services are copied as JSON.']]) }
+	catch { $('paste').value = txt; $('paste').select(); setImport([['', 'Copying is blocked here: your JSON is in the box, selected.']]) }
+}
+function setImport(items) { $('import-flags').innerHTML = items.map(([c, t]) => `<li class="${c === 'good' ? 'ok' : ''}">${t}</li>`).join('') }
+$('apply').onclick = () => {
+	let raw = $('paste').value.trim().replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '')
+	const a = raw.indexOf('{'), b = raw.lastIndexOf('}')
+	if (a < 0 || b < a) return setImport([['', 'No JSON found. Paste the chatbot’s answer, the part between { and }.']])
+	let obj; try { obj = JSON.parse(raw.slice(a, b + 1)) } catch (err) { return setImport([['', 'That is not valid JSON: ' + escapeAttr(err.message)]]) }
+	const svcs = obj.services && typeof obj.services === 'object' ? obj.services : obj
+	const known = new Set(DATA.classes), seen = new Set(), problems = [], services = []
+	for (const [name, list] of Object.entries(svcs)) {
+		if (!Array.isArray(list)) continue
+		const keep = []
+		for (const c of list) {
+			const cls = String(c).split('.').pop().trim()
+			if (!known.has(cls)) problems.push(`unknown class “${escapeAttr(c)}” in ${escapeAttr(name)} (invented or misspelt)`)
+			else if (seen.has(cls)) problems.push(`${cls} appears twice (kept in its first service)`)
+			else { seen.add(cls); keep.push(cls) }
+		}
+		services.push({ name, classes: keep })
+	}
+	if (!services.length) return setImport([['', 'The JSON has no services. Expected {"services": {"Name": ["Class", …]}}.']])
+	const missing = DATA.classes.filter((c) => !seen.has(c))
+	if (missing.length) problems.push(`missing: ${missing.join(', ')}`)
+	state = { services, unassigned: missing }
+	focusMetric = 'valid'
+	setImport(problems.length ? problems.map((p) => ['', p]).concat([['', 'As returned, this answer is <b>not valid</b>. That happens to LLMs: run it again and compare.']]) : [['good', 'Every class placed exactly once. Scored above.']])
+	render()
+	$('h-scores').scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+$('edge-count').textContent = `${DATA.edges.length} weighted dependencies, as the metrics see them`
+render()
+</script>
+
+</body>
+</html>
