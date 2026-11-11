@@ -80,7 +80,8 @@ const REF = [
 	{ group: 'our workflow (1 run)', kind: 'ref', scores: { n: 4, valid: true, cmod: 66.8, cid: 100, dtp: 83.9, di: 33.4, bcp: 33.3, c2c: 75.0 } },
 ]
 const METRICS = [['cmod', 'CMod'], ['di', 'DI'], ['bcp', 'BCP'], ['dtp', 'DTP'], ['cid', 'CiD'], ['c2c', 'C2C-50']]
-let metric = 'cmod', rows = []
+let metric = new URLSearchParams(location.search).get('metric') || 'cmod', rows = []
+if (!['cmod', 'di', 'bcp', 'dtp', 'cid', 'c2c'].includes(metric)) metric = 'cmod'
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
 $('tabs').innerHTML = METRICS.map(([k, l]) => `<button data-k="${k}" aria-pressed="${k === metric}">${l}</button>`).join('')
