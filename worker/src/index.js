@@ -75,7 +75,7 @@ export class Room {
 			const s = await this.state()
 			if (s.status !== 'open') return json(req, { error: s.status === 'waiting' ? 'the game has not started yet' : 'time is up: the game is closed' }, 423)
 			if (await this.st.get('dev:' + device)) return json(req, { error: 'already submitted' }, 409)
-			rec.device = device.slice(0, 12); rec.round = s.round
+			rec.device = device; rec.round = s.round
 			await this.st.put({ ['dev:' + device]: 1, [`cut:${rec.at}:${crypto.randomUUID().slice(0, 8)}`]: rec })
 			await this.touch()
 			return json(req, { ok: true, round: s.round })
