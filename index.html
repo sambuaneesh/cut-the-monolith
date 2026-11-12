@@ -114,7 +114,11 @@ dialog.sheet::backdrop { background: rgba(29, 42, 68, 0.32) }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(120px + env(safe-area-inset-bottom, 0px)); z-index: 30; background: var(--ink); color: #fff;
 	border-radius: 12px; padding: 6px 6px 6px 14px; display: flex; align-items: center; gap: 10px; font-size: 14px; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(29, 42, 68, 0.25) }
 .toast button { border: 0; background: rgba(255, 255, 255, 0.16); color: #fff; border-radius: 9px; min-height: 36px; padding: 0 12px; font-weight: 600 }
-body.locked .add, body.locked .x, body.locked #reset { display: none }
+body.locked .add, body.locked .x, body.locked #reset, body.frozen .add, body.frozen .x, body.frozen #reset { display: none }
+body.frozen .cls { cursor: default }
+.gstat { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums }
+.gstat:empty { display: none }
+.gstat.late { color: var(--accent) }
 body.locked .go { background: var(--ok); opacity: 1 }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 </style>
@@ -144,6 +148,7 @@ body.locked .go { background: var(--ok); opacity: 1 }
 <div class="bar" id="bar">
 	<div class="prog" id="prog" aria-hidden="true"><i></i></div>
 	<div class="col">
+		<p class="gstat" id="gstat" role="timer" aria-live="off"></p>
 		<p class="msg" id="send-msg" aria-live="polite"></p>
 		<div class="send">
 			<div class="count" id="count" aria-live="polite"><b>0/23</b><span>placed</span></div>
@@ -258,7 +263,7 @@ function render() {
 			aria-label="${s.name}, ${s.classes.length} class${s.classes.length === 1 ? '' : 'es'}"><span class="mk" aria-hidden="true"></span><span class="nm">${s.name}</span></button>${
 			rm ? `<button class="x" data-x="${i}" aria-label="Remove ${s.name}">×</button>` : ''}</div>`
 	}).join('') + (state.services.length < MAX ? '<button class="add" id="add" aria-label="New microservice">+</button>' : '')
-	$('say').innerHTML = locked ? 'Your cut has been sent.' : `Tapping a class puts it in <b>${sel.name}</b> (${sel.classes.length}) · <b>+</b> starts a new microservice`
+	$('say').innerHTML = locked ? 'Your cut has been sent.' : frozen() ? 'Time’s up: the cut can no longer be changed.' : `Tapping a class puts it in <b>${sel.name}</b> (${sel.classes.length}) · <b>+</b> starts a new microservice`
 	for (const c of DATA.classes) {
 		const b = chip[c], s = state.services[ownerIndex(c)]
 		b.classList.toggle('on', !!s)
@@ -272,13 +277,14 @@ function render() {
 	$('count').classList.toggle('ok', !issues.length)
 	$('count').innerHTML = `<b>${placed}/${DATA.classes.length}</b><span>${issues.length ? issues[0][0] : '✓ ready'}</span>`
 	$('send').textContent = locked ? 'Sent ✓' : armed ? 'Send anyway' : 'Send'
-	if (locked) { $('send').disabled = true; $('group').disabled = true }
+	$('group').disabled = locked
+	syncSend()
 }
 function changed() { armed = false; setMsg('', ''); render() }
 
 // ---------------------------------------------------------------- painting
 function paint(c) {
-	if (locked) return
+	if (locked || frozen()) return
 	const s = state.services[state.sel], back = s.classes.includes(c)
 	for (const x of state.services) x.classes = x.classes.filter((y) => y !== c)
 	state.unassigned = state.unassigned.filter((y) => y !== c)
@@ -288,20 +294,20 @@ function paint(c) {
 	const b = chip[c]; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop')
 }
 function addService() {
-	if (locked) return
+	if (locked || frozen()) return
 	const color = freeColor(); if (color < 0) return
 	state.services.push({ name: HUES[color], color, classes: [] })
 	state.sel = state.services.length - 1
 	changed()
 }
 function removeService(i) {
-	if (locked || state.services.length < 2 || state.services[i].classes.length) return
+	if (locked || frozen() || state.services.length < 2 || state.services[i].classes.length) return
 	state.services.splice(i, 1)
 	if (state.sel >= i && state.sel > 0) state.sel--
 	changed()
 }
 function startOver() {
-	if (locked || state.unassigned.length === DATA.classes.length && state.services.length === 1) return
+	if (locked || frozen() || state.unassigned.length === DATA.classes.length && state.services.length === 1) return
 	const before = JSON.stringify(state)
 	state = fresh(); changed()
 	toast('Cleared', () => { state = JSON.parse(before); changed() })
@@ -338,7 +344,7 @@ function depsSheet(c) {
 let toastTimer = 0
 function toast(text, undo) {
 	$('toast-text').textContent = text; $('toast').hidden = false
-	$('toast-undo').onclick = () => { $('toast').hidden = true; if (!locked) undo() }
+	$('toast-undo').onclick = () => { $('toast').hidden = true; if (!locked && !frozen()) undo() }
 	clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true }, 5000)
 }
 
@@ -373,14 +379,23 @@ new IntersectionObserver(([en]) => $('palette').classList.toggle('stuck', !en.is
 const BOARD = 'https://cut-the-monolith-board.sambuaneesh.workers.dev', ROOM = 'nov12'
 // one cut per device and room: a random device id goes with the cut (the board refuses a second one with 409),
 // and after a send the page stays locked on this phone
-let locked = false, DEVICE = ''
+let locked = false, sending = false, DEVICE = ''
+let game = { round: null, status: 'open', endsAt: null }, offset = 0, seenRound = null // no state yet: open, no timer
 try { DEVICE = localStorage.getItem('ctm-device') || '' } catch {}
 if (!DEVICE) {
 	try { DEVICE = crypto.randomUUID() } catch { DEVICE = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36) }
 	try { localStorage.setItem('ctm-device', DEVICE) } catch {}
 }
-function lock(group, text, cls) {
-	try { localStorage.setItem('ctm-sent-' + ROOM, group) } catch {}
+// the sent flag remembers the round too: when the presenter resets the game (a higher round), this phone can play again
+function readSent() {
+	let v = null
+	try { v = localStorage.getItem('ctm-sent-' + ROOM) } catch {}
+	if (v == null) return null
+	try { const o = JSON.parse(v); if (o && typeof o === 'object') return { name: String(o.name ?? ''), round: Number(o.round) || 0 } } catch {}
+	return { name: v, round: 0 } // an older page stored only the name
+}
+function lock(group, text, cls, round = game.round) {
+	try { localStorage.setItem('ctm-sent-' + ROOM, JSON.stringify({ name: group, round: Number(round) || 0 })) } catch {}
 	locked = true; armed = false; $('toast').hidden = true; document.body.classList.add('locked'); render(); setMsg(text, cls)
 }
 function setMsg(text, cls) { $('send-msg').textContent = text; $('send-msg').className = 'msg ' + cls }
@@ -391,22 +406,69 @@ $('send').onclick = async () => {
 	if (!group) { setMsg('Type your name first, so you can find yourself on the board.', 'bad'); $('group').focus(); return }
 	try { localStorage.setItem('cut-group', group) } catch {}
 	const issues = problems()
+	if (!isOpen()) { setMsg(game.status === 'waiting' ? 'The game has not started yet.' : 'Time’s up: the game is closed.', 'bad'); return }
 	if (issues.length && !armed) { armed = true; render(); setMsg(`Not a valid cut yet: ${issues[0][1]}. Tap “Send anyway” to send it as it is.`, 'bad'); return }
 	if (!BOARD.startsWith('http')) { setMsg('The class board is not switched on yet.', 'bad'); return }
-	setMsg('Sending…', ''); $('send').disabled = true
+	setMsg('Sending…', ''); sending = true; syncSend()
 	try {
 		const r = await fetch(BOARD + '/cuts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload(group)) })
 		if (r.status === 409) return lock(group, 'This device has already sent a cut.', 'bad')
+		if (r.status === 423) { // the game is not open: waiting for the start, or time is up
+			let m = 'the game is not open'
+			try { m = (await r.json()).error || m } catch {}
+			setMsg(m.charAt(0).toUpperCase() + m.slice(1) + '.', 'bad'); pollState(); return
+		}
 		if (!r.ok) throw new Error(await r.text())
-		lock(group, 'Your cut is on the board. One cut per person.', 'good')
+		let round = game.round
+		try { round = (await r.json()).round ?? round } catch {}
+		lock(group, 'Your cut is on the board. One cut per person.', 'good', round)
 	} catch (err) { setMsg('Could not send: ' + (err.message || 'network error') + '. Try again.', 'bad') }
-	finally { $('send').disabled = locked }
+	finally { sending = false; syncSend() }
+}
+
+// ---------------------------------------------------------------- the game's state, set by the presenter: waiting, open (maybe with a timer), closed
+// the server's clock decides; offset corrects this phone's clock for the countdown
+function remaining() { return game.endsAt == null ? null : game.endsAt - (Date.now() + offset) }
+function frozen() { const left = remaining(); return game.status === 'closed' || (game.status === 'open' && left != null && left <= 0) }
+function isOpen() { return game.status === 'open' && !frozen() }
+function syncSend() { $('send').disabled = locked || sending || !isOpen() }
+let wasFrozen = false
+function showGame() {
+	const left = remaining(), fz = frozen()
+	let text = '', late = fz
+	if (game.status === 'waiting') text = 'Waiting for the start…'
+	else if (fz) text = 'Time’s up'
+	else if (left != null) { const s = Math.ceil(left / 1000); text = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left`; late = s < 30 }
+	$('gstat').textContent = text; $('gstat').classList.toggle('late', late)
+	document.body.classList.toggle('frozen', fz)
+	if (fz !== wasFrozen) { wasFrozen = fz; if (fz) { armed = false; $('toast').hidden = true; closeSheet() } render() } else syncSend()
+}
+function newRound() {
+	const r = Number(game.round); if (game.round == null || !Number.isFinite(r)) return
+	const sent = readSent(), reset = (sent && r > sent.round) || (seenRound != null && r > seenRound)
+	seenRound = r
+	if (!reset) return
+	try { localStorage.removeItem('ctm-sent-' + ROOM) } catch {}
+	locked = false; armed = false; state = fresh(); document.body.classList.remove('locked'); $('toast').hidden = true
+	render(); setMsg('A new game has started. Make a new cut.', 'good')
+}
+async function pollState() {
+	if (!BOARD.startsWith('http')) return
+	try {
+		const r = await fetch(`${BOARD}/state?room=${encodeURIComponent(ROOM)}`, { cache: 'no-store' })
+		if (!r.ok) throw new Error(r.status)
+		const s = await r.json()
+		if (typeof s.now === 'number') offset = s.now - Date.now()
+		game = { round: s.round ?? null, status: ['waiting', 'open', 'closed'].includes(s.status) ? s.status : 'open', endsAt: typeof s.endsAt === 'number' ? s.endsAt : null }
+		newRound()
+	} catch {}
+	showGame()
 }
 
 render()
-let sentAs = null
-try { sentAs = localStorage.getItem('ctm-sent-' + ROOM) } catch {}
-if (sentAs !== null) { $('group').value = sentAs; lock(sentAs, 'Your cut is on the board. One cut per person.', 'good') } else guide()
+const sentAs = readSent()
+if (sentAs) { $('group').value = sentAs.name; lock(sentAs.name, 'Your cut is on the board. One cut per person.', 'good', sentAs.round) } else guide()
+pollState(); setInterval(pollState, 3000); setInterval(showGame, 500)
 </script>
 
 </body>
