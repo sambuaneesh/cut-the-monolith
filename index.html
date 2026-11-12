@@ -275,21 +275,14 @@ function unassigned() { return state.unassigned }
 function ownerIndex(c) { return state.services.findIndex((s) => s.classes.includes(c)) }
 function currentScores() {
 	const dec = decomposition(), n = Object.keys(dec).length
-	const valid = unassigned().length === 0 && n >= 3 && state.services.every((x) => x.classes.length > 0)
+	// ranked on the board only with every class placed and 3+ microservices (an empty colour is just ignored).
+	// The page never says so: breaking the rules is the board's surprise.
+	const valid = unassigned().length === 0 && n >= 3
 	if (!n) return { valid, n, cmod: 0, cid: 0, dtp: 0, di: 0, bcp: 0, c2c: 0 }
 	return { valid, n, cmod: cmod(dec), cid: cid(dec).value, dtp: labelPurity(dec, DATA.tables), di: labelPurity(dec, DATA.usecases), bcp: bcp(dec, DATA.usecases), c2c: c2c(dec, 0.5) }
 }
 // what Send posts to the class board
 function payload(group) { return { room: ROOM, group, kind: 'hand', services: decomposition(), unassigned: unassigned().length, scores: currentScores(), device: DEVICE } }
-// the rules a cut must meet to be ranked on the board: short words for the bar, a sentence for the message
-function problems() {
-	const out = [], left = unassigned().length, n = Object.keys(decomposition()).length, empty = state.services.filter((s) => !s.classes.length)
-	if (left) out.push([`${left} to go`, `${left} class${left > 1 ? 'es are' : ' is'} not in a microservice yet`])
-	if (n < 3) out.push(['need 3+ colours', `only ${n} colour${n === 1 ? ' has' : 's have'} classes; a valid cut needs at least three microservices`])
-	if (empty.length) out.push(['empty colour', `${empty[0].name} is empty: tap classes into it, or remove it with ×`])
-	return out
-}
-
 // ---------------------------------------------------------------- the classes: one alphabetical list, built once, then updated in place
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
@@ -299,7 +292,7 @@ $('classes').innerHTML = DATA.classes.slice().sort().map((c) => `<button class="
 for (const b of document.querySelectorAll('.cls')) chip[b.dataset.c] = b
 
 // ---------------------------------------------------------------- render
-let armed = false // an invalid cut needs a second tap on Send
+let armed = false // one cut per phone: Send needs a second tap, for every cut
 function render() {
 	const sel = state.services[state.sel], removable = state.services.length > 1
 	$('svcs').innerHTML = state.services.map((s, i) => {
@@ -316,12 +309,12 @@ function render() {
 		b.querySelector('.tg').textContent = s ? s.name : ''
 		b.setAttribute('aria-label', `${c}, ${s ? 'in ' + s.name : 'not placed'}`)
 	}
-	const placed = DATA.classes.length - unassigned().length, issues = problems()
+	const placed = DATA.classes.length - unassigned().length, all = placed === DATA.classes.length
 	$('prog').firstElementChild.style.width = (placed / DATA.classes.length) * 100 + '%'
-	$('prog').classList.toggle('done', !issues.length)
-	$('count').classList.toggle('ok', !issues.length)
-	$('count').innerHTML = `<b>${placed}/${DATA.classes.length}</b><span>${issues.length ? issues[0][0] : '✓ ready'}</span>`
-	$('send').textContent = locked ? 'Sent ✓' : armed ? 'Send anyway' : 'Send'
+	$('prog').classList.toggle('done', all)
+	$('count').classList.toggle('ok', false)
+	$('count').innerHTML = `<b>${placed}/${DATA.classes.length}</b><span>placed</span>`
+	$('send').textContent = locked ? 'Sent ✓' : armed ? 'Tap again to send' : 'Send'
 	syncSend()
 }
 function changed() { armed = false; setMsg('', ''); render() }
@@ -448,9 +441,8 @@ function setMsg(text, cls) { $('send-msg').textContent = text; $('send-msg').cla
 $('send').onclick = async () => {
 	const group = (me?.name ?? '').slice(0, 30)
 	if (!group) { gate(); return }
-	const issues = problems()
 	if (!isOpen()) { setMsg(game.status === 'waiting' ? 'The game has not started yet.' : 'Time’s up: the game is closed.', 'bad'); return }
-	if (issues.length && !armed) { armed = true; render(); setMsg(`Not a valid cut yet: ${issues[0][1]}. Tap “Send anyway” to send it as it is.`, 'bad'); return }
+	if (!armed) { armed = true; render(); setMsg('One cut per phone: it can’t be changed after sending.', ''); return }
 	if (!BOARD.startsWith('http')) { setMsg('The class board is not switched on yet.', 'bad'); return }
 	setMsg('Sending…', ''); sending = true; syncSend()
 	try {
