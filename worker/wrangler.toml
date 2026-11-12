@@ -6,3 +6,12 @@ compatibility_date = "2026-10-01"
 [[kv_namespaces]]
 binding = "CUTS"
 id = "3d23359befa84d95b67473d896f7a287"
+
+# each class room is one Durable Object (strongly consistent state: timer, stop, reset)
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
