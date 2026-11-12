@@ -17,7 +17,6 @@ function cors() {
 	// admin actions are protected by the key, not by the origin
 	return { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type' }
 }
-}
 const json = (req, body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors(req) } })
 const word = (s, n) => typeof s === 'string' && s.length > 0 && s.length <= n
 const roomOk = (r) => typeof r === 'string' && /^[a-z0-9-]{1,40}$/.test(r)
