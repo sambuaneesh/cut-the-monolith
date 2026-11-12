@@ -9,13 +9,14 @@
 // A room with no state yet is 'open' with no timer, so the game works without the control panel.
 // Each room lives in its own Durable Object (strongly consistent: stop and reset take effect immediately).
 // A room deletes itself seven days after its last write.
-const ORIGINS = ['https://sambuaneesh.github.io', 'http://localhost:8000', 'http://127.0.0.1:8000']
 const MAX_BYTES = 16000
 const TTL = 7 * 24 * 3600
 
-function cors(req) {
-	const o = req.headers.get('origin')
-	return { 'access-control-allow-origin': ORIGINS.includes(o) ? o : ORIGINS[0], 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', vary: 'origin' }
+function cors() {
+	// any origin: the board and the game page live on GitHub Pages, the control panel inside the tldraw app;
+	// admin actions are protected by the key, not by the origin
+	return { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type' }
+}
 }
 const json = (req, body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors(req) } })
 const word = (s, n) => typeof s === 'string' && s.length > 0 && s.length <= n
