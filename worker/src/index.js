@@ -3,10 +3,13 @@
 //                         refused (423) while the game is closed.
 //   GET  /cuts?room=…     the current round's cuts, one entry per phone (each carries its device id, so two
 //                         students with the same name stay two entries).
+//   POST /join            { room, device, name }: a phone says who it is before the game starts (allowed while
+//                         waiting or open; the latest name wins). Refused (423) once the game is closed.
+//   GET  /players?room=…  everyone who joined this round: [{ device, name, at }]
 //   GET  /state?room=…    { round, status: 'waiting' | 'open' | 'closed', endsAt (ms or null), now }
 //   POST /admin           { room, key, action: 'start' (with minutes) | 'stop' | 'extend' (with seconds) | 'reset' }; key = the ADMIN_KEY secret.
-//                         reset deletes the round's cuts and starts a new round (phones may play again).
-// A room with no state yet is 'open' with no timer, so the game works without the control panel.
+//                         reset deletes the round's cuts and players and starts a new round (phones may play again).
+// A room with no state yet is 'waiting': nobody can send until the presenter starts the timer.
 // Each room lives in its own Durable Object (strongly consistent: stop and reset take effect immediately).
 // A room deletes itself seven days after its last write.
 const MAX_BYTES = 16000
@@ -41,7 +44,7 @@ function clean(b) {
 export class Room {
 	constructor(ctx, env) { this.ctx = ctx; this.env = env; this.st = ctx.storage }
 	async state() {
-		const s = (await this.st.get('state')) ?? { round: 1, status: 'open', endsAt: null }
+		const s = (await this.st.get('state')) ?? { round: 1, status: 'waiting', endsAt: null }
 		if (s.status === 'open' && s.endsAt && Date.now() >= s.endsAt) s.status = 'closed' // the timer ran out
 		return s
 	}
@@ -63,12 +66,27 @@ export class Room {
 				if (s.endsAt) Object.assign(s, { status: 'open', endsAt: Math.max(s.endsAt, Date.now()) + add })
 			}
 			else if (b.action === 'reset') {
-				const keys = [...(await this.st.list({ prefix: 'cut:' })).keys(), ...(await this.st.list({ prefix: 'dev:' })).keys()]
+				const keys = []
+				for (const prefix of ['cut:', 'dev:', 'join:']) keys.push(...(await this.st.list({ prefix })).keys())
 				for (let i = 0; i < keys.length; i += 128) await this.st.delete(keys.slice(i, i + 128))
 				Object.assign(s, { round: (s.round ?? 1) + 1, status: 'waiting', endsAt: null })
 			} else return json(req, { error: 'bad action' }, 400)
 			await this.st.put('state', s); await this.touch()
 			return json(req, { ...s, now: Date.now() })
+		}
+		if (url.pathname === '/players') return json(req, [...(await this.st.list({ prefix: 'join:', limit: 500 })).values()])
+		if (url.pathname === '/join') {
+			let b
+			try { b = JSON.parse(await req.text()) } catch { return json(req, { error: 'bad json' }, 400) }
+			if (typeof b.device !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(b.device)) return json(req, { error: 'missing device id' }, 400)
+			const name = typeof b.name === 'string' ? b.name.trim() : ''
+			if (!word(name, 30)) return json(req, { error: 'give a name of up to 30 characters' }, 400)
+			const s = await this.state()
+			if (s.status === 'closed') return json(req, { error: 'time is up: the game is closed' }, 423)
+			const old = await this.st.get('join:' + b.device)
+			await this.st.put('join:' + b.device, { device: b.device, name, at: old?.at ?? Date.now(), round: s.round })
+			await this.touch()
+			return json(req, { ok: true, ...s, now: Date.now() })
 		}
 		if (req.method === 'POST') {
 			let rec, device
@@ -93,7 +111,7 @@ export default {
 	async fetch(req, env) {
 		const url = new URL(req.url)
 		if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(req) })
-		const known = { '/state': ['GET'], '/admin': ['POST'], '/cuts': ['GET', 'POST'] }
+		const known = { '/state': ['GET'], '/admin': ['POST'], '/cuts': ['GET', 'POST'], '/join': ['POST'], '/players': ['GET'] }
 		if (!known[url.pathname]) return json(req, { error: 'not found' }, 404)
 		if (!known[url.pathname].includes(req.method)) return json(req, { error: 'method not allowed' }, 405)
 		const text = req.method === 'POST' ? await req.text() : ''
