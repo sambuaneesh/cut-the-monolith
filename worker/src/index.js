@@ -4,7 +4,7 @@
 //   GET  /cuts?room=…     the current round's cuts, one entry per phone (each carries its device id, so two
 //                         students with the same name stay two entries).
 //   GET  /state?room=…    { round, status: 'waiting' | 'open' | 'closed', endsAt (ms or null), now }
-//   POST /admin           { room, key, action: 'start' (with minutes) | 'stop' | 'reset' }; key = the ADMIN_KEY secret.
+//   POST /admin           { room, key, action: 'start' (with minutes) | 'stop' | 'extend' (with seconds) | 'reset' }; key = the ADMIN_KEY secret.
 //                         reset deletes the round's cuts and starts a new round (phones may play again).
 // A room with no state yet is 'open' with no timer, so the game works without the control panel.
 // Each room lives in its own Durable Object (strongly consistent: stop and reset take effect immediately).
@@ -57,6 +57,11 @@ export class Room {
 			const s = await this.state()
 			if (b.action === 'start') Object.assign(s, { status: 'open', endsAt: Date.now() + Math.min(60, Math.max(1, Number(b.minutes) || 5)) * 60000 })
 			else if (b.action === 'stop') Object.assign(s, { status: 'closed', endsAt: null })
+			else if (b.action === 'extend') {
+				// add time (the presenter's hidden +1 min / +10 s); a timer that has just run out reopens
+				const add = Math.min(600, Math.max(1, Number(b.seconds) || 60)) * 1000
+				if (s.endsAt) Object.assign(s, { status: 'open', endsAt: Math.max(s.endsAt, Date.now()) + add })
+			}
 			else if (b.action === 'reset') {
 				const keys = [...(await this.st.list({ prefix: 'cut:' })).keys(), ...(await this.st.list({ prefix: 'dev:' })).keys()]
 				for (let i = 0; i < keys.length; i += 128) await this.st.delete(keys.slice(i, i + 128))
