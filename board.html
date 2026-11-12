@@ -9,7 +9,9 @@
 /* Layout: a projector page (shown in an 1800×1000 frame that cannot scroll), white like the playground.
    The heading; then the leaderboard, one column; next to it, only when someone broke the rules, the rule-breakers.
    Few players: huge rows. As players arrive the rows shrink smoothly, down to the size where 7 rows fill the
-   height; past 7, the top 7 stay (with "…and N more"). The rule-breakers shrink the same way, down to 5 rows. */
+   height; past 7, the top 7 stay (with "…and N more"). The rule-breakers shrink the same way, down to 5 rows.
+   ?view=all (the next slide): everyone who joined, as tiles that fill the page: position and score, the
+   rule-breakers with their reason, and those who never sent ("ran out of time"). */
 @property --rh { syntax: '<length>'; inherits: true; initial-value: 200px }
 @property --srh { syntax: '<length>'; inherits: true; initial-value: 110px }
 :root {
@@ -38,7 +40,7 @@ th { font-size: 16px; font-weight: 600; color: var(--muted); padding: 0 10px 6px
 td { border-bottom: 1px solid var(--line); padding: 0 10px }
 td.n, th.n { text-align: right }
 .lb td { height: var(--rh); font-size: calc(var(--rh) * 0.46) }
-.lb col.rk { width: calc(var(--rh) * 1.2) } .lb col.sc { width: calc(var(--rh) * 2) }
+.lb col.rk { width: calc(var(--rh) * 1.05) } .lb col.sc { width: calc(var(--rh) * 1.7) }
 .lb th { font-size: 18px }
 .lb td.rk { color: var(--muted); font-weight: 600 }
 .lb tr.top td { background: var(--gold); font-weight: 700; font-size: calc(var(--rh) * 0.56) }
@@ -53,11 +55,29 @@ td.n, th.n { text-align: right }
 .shame .why { color: var(--bad); font-size: 0.72em; white-space: normal; margin-top: 2px }
 .shame tr:last-child td { border-bottom: 0 }
 .shame .more td { color: var(--muted); font-size: calc(var(--srh) * 0.34); height: auto; padding-top: 8px }
+/* view=all: everyone who joined, as tiles that fill the page (sized to fit however many there are) */
+body.all h1 { font-size: 48px }
+.tiles { flex: 1; min-height: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: var(--gap, 12px) }
+.tile { width: var(--tw); height: var(--th); border: 1.5px solid var(--line); border-radius: calc(var(--th) * 0.16); background: #fff;
+	display: flex; align-items: center; gap: calc(var(--th) * 0.18); padding: 0 calc(var(--th) * 0.22); font-size: calc(var(--th) * 0.34); min-width: 0 }
+.tile .rk { flex: none; min-width: 1.6em; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums }
+.tile .bd { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.1 }
+.tile .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.tile .sub { font-size: 0.56em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.15em }
+.tile .sc { flex: none; font-weight: 700; font-variant-numeric: tabular-nums }
+.tile.top { background: var(--gold); border-color: #ecd9a0 }
+.tile.top .rk { color: inherit }
+.tile.bad { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)) }
+.tile.bad .sub { color: var(--bad); font-weight: 600 }
+.tile.bad .rk { color: var(--bad) }
+.tile.late { border-style: dashed; color: var(--muted) }
+.tile.late .nm { font-weight: 500 }
 .upd { position: fixed; right: 14px; bottom: 8px; font-size: 12px; color: var(--faint) }
 </style>
 </head>
 <body>
-<h1>Class board</h1>
+<h1 id="title">Class board</h1>
+<div class="tiles" id="tiles" hidden></div>
 <div class="boards" id="boards">
 	<section class="panel lb" aria-label="Leaderboard"><div id="lb"></div></section>
 	<section class="panel shame" aria-labelledby="h-shame" id="shame" hidden>
@@ -67,13 +87,15 @@ td.n, th.n { text-align: right }
 </div>
 <div class="upd" id="upd"></div>
 <script>
-const BOARD = 'https://cut-the-monolith-board.sambuaneesh.workers.dev', ROOM = new URLSearchParams(location.search).get('room') || 'nov12'
+const Q = new URLSearchParams(location.search)
+const BOARD = 'https://cut-the-monolith-board.sambuaneesh.workers.dev', ROOM = Q.get('room') || 'nov12', ALL = Q.get('view') === 'all'
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+if (ALL) { document.body.classList.add('all'); $('title').textContent = 'Everyone'; $('tiles').hidden = false; $('boards').hidden = true }
 // the score is CMod, rounded to one decimal (ties are judged on what is shown)
 const score = (r) => { const v = Number(r.scores?.cmod); return Number.isFinite(v) ? Math.round(v * 10) / 10 : null }
 const fmt = (v) => v.toFixed(1)
-let rows = []
+let rows = [], players = [], status = null
 
 // one entry per phone: the latest cut of each device (or of each name, for a cut without a device);
 // different phones with the same name become "Rahul" and "Rahul (2)"
@@ -107,12 +129,47 @@ function why(r) {
 
 // how tall a row: huge for the first few players, shrinking until 7 rows fill the height; never more than 7 rows
 const MAX_ROWS = 7, MAX_SHAME = 5
-function fit(n, height) {
+// (and never so tall that the name column gets squeezed: at most an eighth of the panel's width)
+function fit(n, height, width) {
 	const shown = Math.min(n, MAX_ROWS), more = n > MAX_ROWS ? 1 : 0
-	return { shown, rh: Math.floor(Math.min(210, (height - 40) / Math.max(shown + more * 0.5, 2.2))) }
+	return { shown, rh: Math.floor(Math.min(210, width / 8, (height - 40) / Math.max(shown + more * 0.5, 2.2))) }
+}
+
+// the ranking: standard competition ranking (equal scores share the rank: 1, 1, 1, 4 …)
+function ranked(ok) { let rank = 0; return ok.map((r, i) => { if (i === 0 || score(r) !== score(ok[i - 1])) rank = i + 1; return [rank, r] }) }
+
+// view=all: the best tile size for n tiles in w×h (about 4.2 : 1), never taller than 120px
+function tileFit(n, w, h, gap = 12) {
+	let best = { tw: w, th: 0 }
+	for (let c = 1; c <= Math.max(1, n); c++) {
+		const r = Math.ceil(n / c), tw = (w - gap * (c - 1)) / c, th = Math.min(tw / 4.2, (h - gap * (r - 1)) / r, 120)
+		if (th > best.th) best = { tw: Math.floor(tw), th: Math.floor(th) }
+	}
+	return best
+}
+function drawAll() {
+	// everyone who joined (or sent without joining): the ranked first, then the rule-breakers, then those who never sent
+	const sentBy = new Map(rows.map((r) => [r.device ? 'd:' + r.device : 'g:' + r.label.toLowerCase(), r]))
+	const ok = rows.filter((r) => r.scores.valid && score(r) != null).sort((a, b) => score(b) - score(a) || Number(a.at) - Number(b.at))
+	const bad = rows.filter((r) => !r.scores.valid).sort((a, b) => Number(a.at) - Number(b.at))
+	const late = players.filter((p) => !sentBy.has('d:' + p.device)).sort((a, b) => Number(a.at) - Number(b.at))
+	// names for those who never sent: the same "(2)" rule as the board, counted after the senders
+	const seen = {}
+	for (const r of rows) { const k = String(r.group ?? '').trim().toLowerCase(); seen[k] = (seen[k] ?? 0) + 1 }
+	for (const p of late) { const base = String(p.name ?? '').trim() || 'no name', k = base.toLowerCase(); seen[k] = (seen[k] ?? 0) + 1; p.label = seen[k] > 1 ? `${base} (${seen[k]})` : base }
+	const closed = status === 'closed'
+	const tiles = [
+		...ranked(ok).map(([k, r]) => `<div class="tile${k <= 3 ? ' top' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][k - 1] ?? k}</span><span class="bd"><span class="nm">${esc(r.label)}</span></span><span class="sc">${fmt(score(r))}</span></div>`),
+		...bad.map((r) => `<div class="tile bad"><span class="rk">✗</span><span class="bd"><span class="nm">${esc(r.label)}</span><span class="sub">${why(r)}</span></span></div>`),
+		...late.map((p) => `<div class="tile late"><span class="rk">⏱</span><span class="bd"><span class="nm">${esc(p.label)}</span><span class="sub">${closed ? 'ran out of time' : 'still cutting…'}</span></span></div>`),
+	]
+	const box = $('tiles'), { tw, th } = tileFit(tiles.length, box.clientWidth, box.clientHeight)
+	box.style.setProperty('--tw', tw + 'px'); box.style.setProperty('--th', th + 'px')
+	box.innerHTML = tiles.length ? tiles.join('') : `<div class="empty">Nobody has joined yet…</div>`
 }
 
 function draw() {
+	if (ALL) return drawAll()
 	const ok = rows.filter((r) => r.scores.valid && score(r) != null).sort((a, b) => score(b) - score(a) || Number(a.at) - Number(b.at))
 	const bad = rows.filter((r) => !r.scores.valid).sort((a, b) => Number(a.at) - Number(b.at))
 	$('shame').hidden = !bad.length
@@ -124,7 +181,7 @@ function draw() {
 	else {
 		let rank = 0
 		const ranked = ok.map((r, i) => { if (i === 0 || score(r) !== score(ok[i - 1])) rank = i + 1; return [rank, r] })
-		const { shown, rh } = fit(ranked.length, height)
+		const { shown, rh } = fit(ranked.length, height, $('lb').clientWidth || 1400)
 		document.documentElement.style.setProperty('--rh', rh + 'px')
 		const medal = (k) => ['🥇', '🥈', '🥉'][k - 1]
 		const more = ranked.length - shown
@@ -148,10 +205,11 @@ function draw() {
 async function poll() {
 	if (!BOARD.startsWith('http')) { $('upd').textContent = 'board not connected'; draw(); return }
 	try {
-		const r = await fetch(`${BOARD}/cuts?room=${encodeURIComponent(ROOM)}`, { cache: 'no-store' })
-		if (!r.ok) throw new Error(r.status)
-		const raw = await r.json()
+		const get = (path) => fetch(`${BOARD}/${path}?room=${encodeURIComponent(ROOM)}`, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json() })
+		const [raw, ps, st] = await Promise.all([get('cuts'), ALL ? get('players') : null, ALL ? get('state') : null])
 		if (Array.isArray(raw)) rows = entries(raw)
+		if (Array.isArray(ps)) players = ps
+		if (st) status = st.status === 'open' && st.endsAt && st.now >= st.endsAt ? 'closed' : st.status
 		$('upd').textContent = 'updated ' + new Date().toLocaleTimeString()
 	} catch (e) { $('upd').textContent = 'cannot reach the board, retrying…' }
 	draw()

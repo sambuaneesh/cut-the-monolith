@@ -10,6 +10,7 @@
 <style>
 /* One column, top to bottom: title; the colours (sticky at the top while you scroll), one colour per microservice;
    the 23 classes as one alphabetical list; the sticky bottom bar with progress, your name and Send.
+   Before the game, a gate: your name first, then a wait until the presenter starts the timer (the same time for all).
    Every visit starts empty. No scores are shown: they are computed and sent to the class board only. */
 :root {
 	--ink: #1d2a44; --muted: #667085; --faint: #98a2b3; --line: #e4e7ec; --soft: #f6f7f9; --paper: #ffffff;
@@ -85,8 +86,6 @@ button { cursor: pointer }
 .count b { display: block; font-size: 19px; font-variant-numeric: tabular-nums }
 .count span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap }
 .count.ok span { color: var(--ok); font-weight: 600 }
-.team { flex: 1; width: 0; min-width: 0; min-height: 46px; border: 1.5px solid var(--line); border-radius: 12px; padding: 0 12px; background: var(--paper); font-size: 16px }
-.team:focus { border-color: var(--ink); outline: none }
 .go { flex: none; min-height: 46px; padding: 0 18px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; font-size: 16px }
 .go[disabled] { opacity: 0.6 }
 .msg { margin: 0; font-size: 14px }
@@ -120,11 +119,58 @@ body.frozen .cls { cursor: default }
 .gstat:empty { display: none }
 .gstat.late { color: var(--accent) }
 body.locked .go { background: var(--ok); opacity: 1 }
+/* the gate, before the game: your name, then the wait for the presenter's start (everyone gets the same time) */
+body.gated > :not(.gate):not(dialog):not(script) { display: none !important }
+.gate { display: none; min-height: 100vh; min-height: 100dvh; align-items: center }
+body.gated .gate { display: flex }
+.gate .col { width: 100%; padding-top: 32px; padding-bottom: 48px }
+.gate h1 { font-size: 30px; line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 6px }
+.gate p { margin: 0; color: var(--muted); font-size: 17px; max-width: 40ch }
+.gate .lead { color: var(--ink); font-size: 22px; font-weight: 600; margin-bottom: 8px }
+.gate form { display: grid; gap: 10px; margin-top: 22px }
+.gate input { min-height: 54px; border: 1.5px solid var(--line); border-radius: 14px; padding: 0 14px; font-size: 18px; background: var(--paper) }
+.gate input:focus { border-color: var(--ink); outline: none }
+.gate .primary { min-height: 54px; font-size: 17px }
+.gate .msg { margin-top: 4px }
+.wait { display: flex; gap: 8px; margin: 26px 0 24px }
+.wait i { width: 12px; height: 12px; border-radius: 50%; background: var(--faint) }
+@media (prefers-reduced-motion: no-preference) {
+	.wait i { animation: blink 1.4s infinite ease-in-out both } .wait i:nth-child(2) { animation-delay: .2s } .wait i:nth-child(3) { animation-delay: .4s }
+	@keyframes blink { 0%, 80%, 100% { opacity: .25; transform: scale(.8) } 40% { opacity: 1; transform: scale(1) } }
+}
+.linkish { border: 0; background: none; padding: 8px 0; color: var(--muted); text-decoration: underline; font-size: 15px; min-height: 44px }
+.as { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.as b { color: var(--ink) }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 </style>
 </head>
 <body>
 
+
+<section class="gate" id="gate" aria-live="polite">
+	<div class="col">
+		<div id="g-name">
+			<h1>Cut the Monolith</h1>
+			<p>Your name goes on the class board.</p>
+			<form id="join-form" autocomplete="off">
+				<label class="sr" for="name">Your name</label>
+				<input id="name" maxlength="30" placeholder="Your name" enterkeyhint="go" autocapitalize="words">
+				<button class="primary" id="join" type="submit">Join</button>
+				<p class="msg" id="join-msg"></p>
+			</form>
+		</div>
+		<div id="g-wait" hidden>
+			<p class="lead">You’re in, <span id="hi"></span> 👋</p>
+			<p>Wait until the presenter starts the game, so that everyone gets the same five minutes.</p>
+			<div class="wait" aria-hidden="true"><i></i><i></i><i></i></div>
+			<button class="linkish" id="rename" type="button">Not you? Change the name</button>
+		</div>
+		<div id="g-closed" hidden>
+			<h1>Time’s up</h1>
+			<p>This game is closed. Look at the class board.</p>
+		</div>
+	</div>
+</section>
 
 <header class="col top">
 	<div class="hrow">
@@ -152,8 +198,7 @@ body.locked .go { background: var(--ok); opacity: 1 }
 		<p class="msg" id="send-msg" aria-live="polite"></p>
 		<div class="send">
 			<div class="count" id="count" aria-live="polite"><b>0/23</b><span>placed</span></div>
-			<label class="sr" for="group">Your name</label>
-			<input class="team" id="group" maxlength="30" placeholder="Your name" autocomplete="off" enterkeyhint="send">
+			<span class="as" id="as"></span>
 			<button class="go" id="send">Send</button>
 		</div>
 	</div>
@@ -277,7 +322,6 @@ function render() {
 	$('count').classList.toggle('ok', !issues.length)
 	$('count').innerHTML = `<b>${placed}/${DATA.classes.length}</b><span>${issues.length ? issues[0][0] : '✓ ready'}</span>`
 	$('send').textContent = locked ? 'Sent ✓' : armed ? 'Send anyway' : 'Send'
-	$('group').disabled = locked
 	syncSend()
 }
 function changed() { armed = false; setMsg('', ''); render() }
@@ -376,11 +420,13 @@ $('reset').onclick = startOver
 new IntersectionObserver(([en]) => $('palette').classList.toggle('stuck', !en.isIntersecting), { threshold: 0 }).observe(document.querySelector('.top'))
 
 // ---------------------------------------------------------------- the class board
-const BOARD = 'https://cut-the-monolith-board.sambuaneesh.workers.dev', ROOM = 'nov12'
+const BOARD = 'https://cut-the-monolith-board.sambuaneesh.workers.dev'
+let ROOM = 'nov12'
+try { const q = new URLSearchParams(location.search).get('room'); if (q && /^[a-z0-9-]{1,40}$/.test(q)) ROOM = q } catch {} // ?room= for tests
 // one cut per device and room: a random device id goes with the cut (the board refuses a second one with 409),
 // and after a send the page stays locked on this phone
 let locked = false, sending = false, DEVICE = ''
-let game = { round: null, status: 'open', endsAt: null }, offset = 0, seenRound = null // no state yet: open, no timer
+let game = { round: null, status: 'waiting', endsAt: null }, offset = 0, seenRound = null // until the first answer: waiting
 try { DEVICE = localStorage.getItem('ctm-device') || '' } catch {}
 if (!DEVICE) {
 	try { DEVICE = crypto.randomUUID() } catch { DEVICE = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36) }
@@ -399,12 +445,9 @@ function lock(group, text, cls, round = game.round) {
 	locked = true; armed = false; $('toast').hidden = true; document.body.classList.add('locked'); render(); setMsg(text, cls)
 }
 function setMsg(text, cls) { $('send-msg').textContent = text; $('send-msg').className = 'msg ' + cls }
-try { $('group').value = localStorage.getItem('cut-group') || '' } catch {}
-$('group').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('send').click() })
 $('send').onclick = async () => {
-	const group = $('group').value.trim().slice(0, 30)
-	if (!group) { setMsg('Type your name first, so you can find yourself on the board.', 'bad'); $('group').focus(); return }
-	try { localStorage.setItem('cut-group', group) } catch {}
+	const group = (me?.name ?? '').slice(0, 30)
+	if (!group) { gate(); return }
 	const issues = problems()
 	if (!isOpen()) { setMsg(game.status === 'waiting' ? 'The game has not started yet.' : 'Time’s up: the game is closed.', 'bad'); return }
 	if (issues.length && !armed) { armed = true; render(); setMsg(`Not a valid cut yet: ${issues[0][1]}. Tap “Send anyway” to send it as it is.`, 'bad'); return }
@@ -450,7 +493,8 @@ function newRound() {
 	if (!reset) return
 	try { localStorage.removeItem('ctm-sent-' + ROOM) } catch {}
 	locked = false; armed = false; state = fresh(); document.body.classList.remove('locked'); $('toast').hidden = true
-	render(); setMsg('A new game has started. Make a new cut.', 'good')
+	played = false; guided = false
+	render(); setMsg('', '')
 }
 async function pollState() {
 	if (!BOARD.startsWith('http')) return
@@ -458,17 +502,57 @@ async function pollState() {
 		const r = await fetch(`${BOARD}/state?room=${encodeURIComponent(ROOM)}`, { cache: 'no-store' })
 		if (!r.ok) throw new Error(r.status)
 		const s = await r.json()
-		if (typeof s.now === 'number') offset = s.now - Date.now()
-		game = { round: s.round ?? null, status: ['waiting', 'open', 'closed'].includes(s.status) ? s.status : 'open', endsAt: typeof s.endsAt === 'number' ? s.endsAt : null }
-		newRound()
+		take(s)
+		// after a reset (a higher round) join again, with the same name
+		if (me && !renaming && game.round != null && me.round !== Number(game.round) && game.status !== 'closed') join(me.name)
 	} catch {}
-	showGame()
+	gate(); showGame()
+}
+function take(s) {
+	if (typeof s.now === 'number') offset = s.now - Date.now()
+	game = { round: s.round ?? null, status: ['waiting', 'open', 'closed'].includes(s.status) ? s.status : 'waiting', endsAt: typeof s.endsAt === 'number' ? s.endsAt : null }
+	newRound()
+}
+
+// ---------------------------------------------------------------- the gate: name first (the board learns who is playing), then wait for the start
+// me = { name, round }: the round this phone joined; after a reset (a higher round) it joins again with the same name
+let me = null, joining = false, played = false, guided = false, renaming = false
+try { const o = JSON.parse(localStorage.getItem('ctm-me-' + ROOM) || 'null'); if (o?.name) me = { name: String(o.name).slice(0, 30), round: Number(o.round) || 0 } } catch {}
+try { $('name').value = me?.name || localStorage.getItem('cut-group') || '' } catch {}
+function saveMe() { try { localStorage.setItem('ctm-me-' + ROOM, JSON.stringify(me)); localStorage.setItem('cut-group', me.name) } catch {} }
+async function join(name) {
+	if (joining) return
+	joining = true; $('join').disabled = true; $('join-msg').className = 'msg'; $('join-msg').textContent = ''
+	try {
+		const r = await fetch(BOARD + '/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: ROOM, device: DEVICE, name }) })
+		const j = await r.json().catch(() => ({}))
+		if (r.status === 423) { game.status = 'closed'; me = { name, round: Number(game.round) || 0 }; saveMe() }
+		else if (!r.ok) throw new Error(j.error || r.status)
+		else { me = { name, round: Number(j.round) || 0 }; saveMe(); renaming = false; take(j) }
+	} catch (e) { $('join-msg').className = 'msg bad'; $('join-msg').textContent = 'Could not join: ' + (e.message || 'network error') + '. Try again.' }
+	finally { joining = false; $('join').disabled = false; gate(); showGame() }
+}
+$('join-form').addEventListener('submit', (e) => {
+	e.preventDefault()
+	const name = $('name').value.trim().slice(0, 30)
+	if (!name) { $('join-msg').className = 'msg bad'; $('join-msg').textContent = 'Type your name first.'; $('name').focus(); return }
+	if (!BOARD.startsWith('http')) { $('join-msg').className = 'msg bad'; $('join-msg').textContent = 'The class board is not switched on yet.'; return }
+	join(name)
+})
+$('rename').onclick = () => { renaming = true; $('name').value = me?.name ?? ''; gate(); $('name').focus() }
+function gate() {
+	const view = locked ? 'game' : !me || renaming ? 'name' : game.status === 'waiting' ? 'wait' : game.status === 'closed' && !played ? 'closed' : 'game'
+	document.body.classList.toggle('gated', view !== 'game')
+	$('g-name').hidden = view !== 'name'; $('g-wait').hidden = view !== 'wait'; $('g-closed').hidden = view !== 'closed'
+	if (me) { $('hi').textContent = me.name; $('as').innerHTML = `as <b>${esc(me.name)}</b>` }
+	if (view === 'game' && !locked) { played = true; if (!guided) { guided = true; guide() } }
 }
 
 render()
 const sentAs = readSent()
-if (sentAs) { $('group').value = sentAs.name; lock(sentAs.name, 'Your cut is on the board. One cut per person.', 'good', sentAs.round) } else guide()
-pollState(); setInterval(pollState, 3000); setInterval(showGame, 500)
+if (sentAs) { me ??= { name: sentAs.name, round: sentAs.round }; lock(sentAs.name, 'Your cut is on the board. One cut per person.', 'good', sentAs.round) }
+gate(); if (!me) $('name').focus()
+pollState(); setInterval(pollState, 2000); setInterval(showGame, 500)
 </script>
 
 </body>
