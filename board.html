@@ -7,26 +7,30 @@
 <meta name="theme-color" content="#ffffff">
 <style>
 /* Layout: a projector page (shown in an 1800×1000 frame that cannot scroll), white like the playground.
-   The heading; then every valid player ranked by the score, flowing into columns; next to it, only when someone broke
-   the rules, the rule-breakers with the reason. The row height shrinks so everyone fits. */
+   The heading; then the leaderboard, one column; next to it, only when someone broke the rules, the rule-breakers.
+   Few players: huge rows. As players arrive the rows shrink smoothly, down to the size where 7 rows fill the
+   height; past 7, the top 7 stay (with "…and N more"). The rule-breakers shrink the same way, down to 5 rows. */
+@property --rh { syntax: '<length>'; inherits: true; initial-value: 200px }
+@property --srh { syntax: '<length>'; inherits: true; initial-value: 110px }
 :root {
 	--bg: #ffffff; --ink: #1d2a44; --muted: #667085; --faint: #98a2b3; --line: #e4e7ec; --soft: #f6f7f9;
 	--gold: #fbf3dc; --bad: #d62839;
 	--display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-	--rh: 56px; --srh: 52px;
+	--rh: 200px; --srh: 110px;
 	color-scheme: light;
+	transition: --rh 700ms cubic-bezier(.2,.7,.2,1), --srh 700ms cubic-bezier(.2,.7,.2,1);
 }
 * { box-sizing: border-box }
 [hidden] { display: none !important }
 html { background: var(--bg) }
 body { margin: 0; height: 100vh; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--display); line-height: 1.2;
 	padding: 24px max(32px, env(safe-area-inset-right, 0px)) 24px max(32px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 18px }
-h1 { font: 700 48px/1.05 var(--display); margin: 0; letter-spacing: -0.02em; flex: none }
+h1 { font: 700 56px/1.05 var(--display); margin: 0; letter-spacing: -0.02em; flex: none }
 .boards { flex: 1; min-height: 0; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr) }
-.boards.two { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) }
+.boards.two { grid-template-columns: minmax(0, 1.9fr) minmax(0, 1.1fr) }
 .panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px }
 .panel h2 { font: 700 30px var(--display); margin: 0; flex: none }
-.cols.one { max-width: 980px }
+.cols.one { max-width: 1400px }
 .cols { display: grid; gap: 0 32px; align-items: start; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)) }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; table-layout: fixed }
 th, td { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -35,19 +39,20 @@ td { border-bottom: 1px solid var(--line); padding: 0 10px }
 td.n, th.n { text-align: right }
 .lb td { height: var(--rh); font-size: calc(var(--rh) * 0.46) }
 .lb col.rk { width: calc(var(--rh) * 1.2) } .lb col.sc { width: calc(var(--rh) * 2) }
-.lb th { font-size: 16px }
+.lb th { font-size: 18px }
 .lb td.rk { color: var(--muted); font-weight: 600 }
 .lb tr.top td { background: var(--gold); font-weight: 700; font-size: calc(var(--rh) * 0.56) }
 .lb tr.top td.rk { font-size: calc(var(--rh) * 0.62); color: inherit }
 .lb tr.top + tr:not(.top) td { border-top: 2px solid var(--line) }
+.lb tr.more td { height: calc(var(--rh) * 0.5); font-size: calc(var(--rh) * 0.3); color: var(--muted); border-bottom: 0 }
 .empty { font-size: 34px; color: var(--muted); padding: 30px 4px }
-.shame h2 { color: var(--bad) }
+.shame h2 { color: var(--bad); font-size: 38px }
 .shame .box { border: 2px solid color-mix(in srgb, var(--bad) 40%, var(--line)); border-radius: 18px; padding: 6px 16px 8px; background: color-mix(in srgb, var(--bad) 3%, #fff) }
-.shame td { height: var(--srh); font-size: calc(var(--srh) * 0.44) }
-.shame td.why { white-space: normal; color: var(--bad); font-size: calc(var(--srh) * 0.38); line-height: 1.15; padding-top: 4px; padding-bottom: 4px }
-.shame col.why { width: 56% }
+.shame td { height: var(--srh); font-size: calc(var(--srh) * 0.36); padding: 6px 10px }
+.shame .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600 }
+.shame .why { color: var(--bad); font-size: 0.72em; white-space: normal; margin-top: 2px }
 .shame tr:last-child td { border-bottom: 0 }
-.shame .more td { color: var(--muted); font-size: 20px; height: auto; padding-top: 8px }
+.shame .more td { color: var(--muted); font-size: calc(var(--srh) * 0.34); height: auto; padding-top: 8px }
 .upd { position: fixed; right: 14px; bottom: 8px; font-size: 12px; color: var(--faint) }
 </style>
 </head>
@@ -100,10 +105,11 @@ function why(r) {
 	return 'an empty service'
 }
 
-// how many columns and how tall a row, so that everyone fits in the height that is there
-function fit(n, height, two) {
-	const cols = n <= 12 ? 1 : n <= 26 ? 2 : two || n <= 51 ? 3 : 4, per = Math.ceil(n / cols)
-	return { cols, per, rh: Math.max(26, Math.min(64, Math.floor((height - 34) / per))) }
+// how tall a row: huge for the first few players, shrinking until 7 rows fill the height; never more than 7 rows
+const MAX_ROWS = 7, MAX_SHAME = 5
+function fit(n, height) {
+	const shown = Math.min(n, MAX_ROWS), more = n > MAX_ROWS ? 1 : 0
+	return { shown, rh: Math.floor(Math.min(210, (height - 40) / Math.max(shown + more * 0.5, 2.2))) }
 }
 
 function draw() {
@@ -118,26 +124,24 @@ function draw() {
 	else {
 		let rank = 0
 		const ranked = ok.map((r, i) => { if (i === 0 || score(r) !== score(ok[i - 1])) rank = i + 1; return [rank, r] })
-		const { cols, per, rh } = fit(ranked.length, height, bad.length > 0)
+		const { shown, rh } = fit(ranked.length, height)
 		document.documentElement.style.setProperty('--rh', rh + 'px')
 		const medal = (k) => ['🥇', '🥈', '🥉'][k - 1]
-		let html = ''
-		for (let c = 0; c < cols; c++) {
-			const part = ranked.slice(c * per, (c + 1) * per); if (!part.length) break
-			html += `<table><colgroup><col class="rk"><col><col class="sc"></colgroup><tr><th>#</th><th>player</th><th class="n">score</th></tr>` +
-				part.map(([k, r]) => `<tr class="${k <= 3 ? 'top' : ''}"><td class="rk">${medal(k) ?? k}</td><td>${esc(r.label)}</td><td class="n">${fmt(score(r))}</td></tr>`).join('') + '</table>'
-		}
-		$('lb').innerHTML = `<div class="cols${cols === 1 ? ' one' : ''}" style="--cols:${cols}">${html}</div>`
+		const more = ranked.length - shown
+		const html = `<table><colgroup><col class="rk"><col><col class="sc"></colgroup><tr><th>#</th><th>player</th><th class="n">score</th></tr>` +
+			ranked.slice(0, shown).map(([k, r]) => `<tr class="${k <= 3 ? 'top' : ''}"><td class="rk">${medal(k) ?? k}</td><td>${esc(r.label)}</td><td class="n">${fmt(score(r))}</td></tr>`).join('') +
+			(more ? `<tr class="more"><td colspan="3">…and ${more} more</td></tr>` : '') + '</table>'
+		$('lb').innerHTML = `<div class="cols one" style="--cols:1">${html}</div>`
 	}
 
 	// the rule-breakers: only when there are any; names and the reason, no scores
 	if (bad.length) {
-		const avail = height - 60, srh = Math.max(34, Math.min(56, Math.floor(avail / bad.length)))
-		const fits = Math.max(1, Math.floor(avail / srh)), show = bad.length > fits ? fits - 1 : bad.length
+		const avail = height - 80, show = Math.min(bad.length, MAX_SHAME)
+		const srh = Math.floor(Math.min(120, avail / Math.max(show + (bad.length > show ? 0.6 : 0), 2.5)))
 		document.documentElement.style.setProperty('--srh', srh + 'px')
-		$('shame-list').innerHTML = `<table><colgroup><col><col class="why"></colgroup>` +
-			bad.slice(0, show).map((r) => `<tr><td>${esc(r.label)}</td><td class="why">${why(r)}</td></tr>`).join('') +
-			(bad.length > show ? `<tr class="more"><td colspan="2">…and ${bad.length - show} more</td></tr>` : '') + '</table>'
+		$('shame-list').innerHTML = `<table>` +
+			bad.slice(0, show).map((r) => `<tr><td><div class="who">${esc(r.label)}</div><div class="why">${why(r)}</div></td></tr>`).join('') +
+			(bad.length > show ? `<tr class="more"><td>…and ${bad.length - show} more</td></tr>` : '') + '</table>'
 	}
 }
 
